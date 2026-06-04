@@ -13,12 +13,12 @@ Hold a hotkey, speak, release. Your speech is transcribed on your GPU with [`fas
 
 ## Demo
 
-https://github.com/MrIago/mr-whisper/releases/download/v0.1.0/mr-whisper-demo.mp4
-
 <p align="center">
   <a href="https://github.com/MrIago/mr-whisper/releases/download/v0.1.0/mr-whisper-demo.mp4">
-    <img src="demo/demo.gif" alt="mr-whisper demo — click to watch with sound" width="420">
+    <img src="demo/demo.gif" alt="mr-whisper demo — click to watch with sound" width="440">
   </a>
+  <br>
+  <em>▶ <a href="https://github.com/MrIago/mr-whisper/releases/download/v0.1.0/mr-whisper-demo.mp4">Watch the demo with sound</a></em>
 </p>
 
 > _Hold `Ctrl+Alt+Space`, speak in Portuguese or English (mixed is fine), release. The text appears where your cursor is._ ▸ 🎤 waveform reacts to your voice ▸ ⟳ transcribing on your GPU ▸ ✓ text pasted at the cursor.
