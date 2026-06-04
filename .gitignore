@@ -1,3 +1,4 @@
 daemon.log
 __pycache__/
 *.pyc
+.remotion-study/

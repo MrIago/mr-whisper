@@ -11,19 +11,19 @@ Hold a hotkey, speak, release. Your speech is transcribed on your GPU with [`fas
 
 ---
 
+## Demo
+
+https://github.com/MrIago/mr-whisper/raw/main/demo/demo.mp4
+
+<p align="center">
+  <img src="demo/demo.gif" alt="mr-whisper demo" width="420">
+</p>
+
+> _Hold `Ctrl+Alt+Space`, speak in Portuguese or English (mixed is fine), release. The text appears where your cursor is._ ▸ 🎤 waveform reacts to your voice ▸ ⟳ transcribing on your GPU ▸ ✓ text pasted at the cursor.
+
 ## Why
 
 Wispr Flow is great but it's paid (~$15/mo), cloud-based, and has no Linux build. I wanted the same "press, talk, it types" experience — but running fully offline on my own GPU, for free. So I built it.
-
-## Demo
-
-> _Hold `Ctrl+Alt+Space`, speak in Portuguese or English (mixed is fine), release. The text appears where your cursor is._
-
-```
-[hold] ▸ 🎤 ▁▃▅▇▅▃▁  (waveform reacts to your voice)
-[release] ▸ ⟳ transcribing…
-        ▸ text pasted at cursor ✓
-```
 
 ## How it works
 
