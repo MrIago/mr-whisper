@@ -85,13 +85,23 @@ choose Groq to spare your VRAM.)
 
 ### Auto-translate
 
-Say **"auto translate {language}"** at the start of your dictation and the rest
-is translated into that language before it's pasted — any language, just say it:
+Say **"auto translate {language}"** in your dictation and the rest is
+**localized** into that language before it's pasted — any language, just say it:
 
 > _"auto translate spanish — good morning everyone"_ → pastes **"buenos días a todos"**
 
+It's not a literal translation — an LLM **adapts** the text: idiomatic
+expressions become their native equivalent, and the tone/register (technical,
+formal, casual) is matched to the situation.
+
+**Speak context first.** Anything you say *before* "auto translate" is treated
+as context for the model (to pick the right tone) and is **never** pasted:
+
+> _"I'm replying to someone on LinkedIn, auto translate english, e aí, bora marcar uma call"_
+> → pastes a polished, professional English message — the LinkedIn note is dropped.
+
 It runs through a cheap LLM. By default it **reuses your Groq key**
-(`llama-3.1-8b-instant`); the setup can also point it at **OpenRouter** (e.g.
+(`llama-3.3-70b-versatile`); the setup can also point it at **OpenRouter** (e.g.
 Gemini Flash) if you prefer. If the translation call fails (offline / no key),
 your original words are pasted instead — you never lose the dictation.
 
