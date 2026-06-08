@@ -24,15 +24,11 @@ import re
 
 import cloud
 
-# Janela do começo onde procuramos o gatilho. Como o que vem antes do comando
-# agora é CONTEXTO (não lixo a cortar), damos uma folga generosa pra você poder
-# falar uma instrução antes do "auto translate".
-_SEARCH_WINDOW = 300
-
 # Detecta "auto translate {idioma}" + captura idioma e onde o comando começa.
 # Tolerante a caixa, hífen, pontuação do whisper e conector opcional (to/para/pra).
 _TRIGGER = re.compile(
-    r"""auto[\s\-]+translate              # "auto translate" / "auto-translate"
+    r"""auto[\s\-]*translate              # "auto translate"/"auto-translate"/"autotranslate"
+                                           #   (o whisper às vezes gruda tudo)
         [\s,:;.]+                          # pontuação/espaço após o comando
         (?:(?:to|para|pra)\s+)?            # conector opcional
         (?P<lang>[^\s,.:;!?]+)             # idioma = 1 palavra (spanish, japonês…)
@@ -44,19 +40,15 @@ _TRIGGER = re.compile(
 
 
 def parse(text: str) -> tuple[str, str, str] | None:
-    """Se houver gatilho na janela inicial, retorna (idioma, contexto, mensagem):
+    """Se houver gatilho na fala, retorna (idioma, contexto, mensagem):
     - idioma  : idioma-alvo falado
     - contexto: tudo dito ANTES do comando (instrução pro LLM; pode ser "")
     - mensagem: tudo DEPOIS do idioma (o que será traduzido/adaptado)
     Senão, None."""
     text = (text or "").strip()
-    # só dispara se o comando começa dentro da janela inicial (evita disparar
-    # com "auto translate" mencionado lá no meio de uma fala longa).
-    head = _TRIGGER.search(text[:_SEARCH_WINDOW])
-    if not head:
-        return None
-    # re-casa no texto COMPLETO a partir do comando, pra `rest` pegar tudo.
-    m = _TRIGGER.search(text, head.start())
+    # "auto translate" é um termo que não se fala à toa → dispara onde aparecer,
+    # sem limite de janela. Tudo antes vira contexto; tudo após o idioma, mensagem.
+    m = _TRIGGER.search(text)
     if not m:
         return None
     lang = m.group("lang").strip()
