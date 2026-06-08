@@ -63,6 +63,40 @@ Logs: `journalctl --user -u mr-whisper -f`.
 
 **Usage:** hold `Ctrl+Alt+Space`, speak, release. `ESC` cancels mid-transcription.
 
+## Setup (optional): cloud STT + auto-translate
+
+Run the interactive, cross-platform setup once to enable two extras:
+
+```bash
+python setup.py          # detects your env, asks what you need, validates keys
+python setup.py --status # show current config
+```
+
+It is **deterministic**: it detects whether you have an NVIDIA GPU and
+`faster-whisper`, and only asks what makes sense for your machine.
+
+### No GPU? Transcribe in the cloud (Groq)
+
+Local transcription needs an NVIDIA GPU + CUDA. If you don't have one, the setup
+sends you straight to **Groq** — free (~8h/day), no GPU, runs on `whisper-large-v3-turbo`
+in the cloud. Get a key at [console.groq.com/keys](https://console.groq.com/keys);
+the setup validates it before saving. (If you *do* have a GPU, you can still
+choose Groq to spare your VRAM.)
+
+### Auto-translate
+
+Say **"auto translate {language}"** at the start of your dictation and the rest
+is translated into that language before it's pasted — any language, just say it:
+
+> _"auto translate spanish — good morning everyone"_ → pastes **"buenos días a todos"**
+
+It runs through a cheap LLM. By default it **reuses your Groq key**
+(`llama-3.1-8b-instant`); the setup can also point it at **OpenRouter** (e.g.
+Gemini Flash) if you prefer. If the translation call fails (offline / no key),
+your original words are pasted instead — you never lose the dictation.
+
+Keys and preferences are stored in `~/.config/mr-whisper/.env` (private).
+
 ## Configuration
 
 | Env var | Default | Description |
@@ -72,9 +106,17 @@ Logs: `journalctl --user -u mr-whisper -f`.
 | `VOICEFLOW_COMPUTE` | `int8_float16` | compute type |
 | `VOICEFLOW_MIC` | `default` | ALSA/PipeWire capture device |
 | `VOICEFLOW_PASTE` | `ctrl+shift+v` | paste shortcut |
+| `MRWHISPER_STT` | `local` | transcription backend: `local` (faster-whisper) or `groq` |
+| `MRWHISPER_TRANSLATE` | `groq` | auto-translate backend: `groq` or `openrouter` |
+| `GROQ_API_KEY` | — | cloud transcription and/or translation ([get one](https://console.groq.com/keys)) |
+| `OPENROUTER_KEY` | — | translation via OpenRouter ([get one](https://openrouter.ai/keys)) |
+
+> These are usually set by `python setup.py` (saved to `~/.config/mr-whisper/.env`), but env vars override the file.
 
 ## Roadmap
 
+- [x] Cloud transcription via Groq (no GPU required)
+- [x] Auto-translate ("auto translate {language}" → translated before paste)
 - [ ] Cross-platform: Windows (NVIDIA/CUDA) and macOS (whisper.cpp + Metal)
 - [ ] Wayland support (`ydotool`/portal-based input)
 - [ ] Configurable hotkey + tray settings UI

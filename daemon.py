@@ -30,6 +30,9 @@ from pathlib import Path
 import evdev
 from evdev import ecodes
 
+import config
+import translate
+
 # ---- config ----
 ARECORD_DEVICE = os.environ.get("VOICEFLOW_MIC", "default")
 HERE = Path(__file__).parent
@@ -219,6 +222,36 @@ class ASRClient:
         self.start_server()
 
 
+class CloudASRClient:
+    """Transcrição via nuvem (Groq/OpenAI). Mesma interface do ASRClient, mas
+    sem subprocesso/modelo local. Usado quando MRWHISPER_STT=groq."""
+
+    def __init__(self) -> None:
+        self.proc = None  # compat com cleanup() do daemon
+        self._cancelled = False
+
+    def start_server(self) -> None:
+        log("transcrição via nuvem (Groq) — sem modelo local.")
+
+    def transcribe(self, wav: str) -> str | None:
+        self._cancelled = False
+        try:
+            import cloud
+            text = cloud.transcribe_cloud(wav)
+            if self._cancelled:
+                return None
+            return text
+        except Exception as exc:
+            if self._cancelled:
+                return None
+            log(f"falha STT nuvem: {exc}")
+            return ""
+
+    def cancel(self) -> None:
+        # request HTTP não é interrompível aqui; marca e ignora o resultado.
+        self._cancelled = True
+
+
 # WM_CLASS (lowercase) de apps que usam Ctrl+Shift+V em vez de Ctrl+V.
 TERMINAL_CLASSES = (
     "terminal", "gnome-terminal", "konsole", "xterm", "rxvt", "urxvt",
@@ -294,8 +327,12 @@ def _set_clipboard(text: str) -> None:
 class VoiceFlow:
     def __init__(self) -> None:
         self.widget = Widget()
-        self.asr = ASRClient()
-        log("iniciando servidor ASR…")
+        stt = (config.get("MRWHISPER_STT", "local") or "local").lower()
+        if stt == "groq":
+            self.asr = CloudASRClient()
+        else:
+            self.asr = ASRClient()
+        log(f"iniciando ASR (backend: {stt})…")
         self.asr.start_server()
         self.recorder = Recorder(self.widget)
         self.recording = False
@@ -343,6 +380,11 @@ class VoiceFlow:
             if text is None:  # cancelado
                 return
             log(f"transcrito ({time.time()-t0:.1f}s): {text!r}")
+            # auto-translate: se o texto começa com "auto translate {idioma}",
+            # traduz o resto antes de colar (Groq/OpenRouter). Falha → original.
+            if text and translate.parse(text):
+                self.widget.send("transcribing")  # mantém o dock durante a tradução
+                text = translate.maybe_translate(text, log=log)
             # esconde o dock antes de colar e cola — sem animação de paste
             # (o xdotool congela o X e travava o shimmer; não compensava).
             self.widget.send("hide")
