@@ -19,8 +19,8 @@ import re
 
 import cloud
 
-# Janela do começo onde procuramos o gatilho (resquício do whisper cabe aqui).
-_SEARCH_WINDOW = 100
+# Janela do começo onde procuramos o gatilho (preâmbulo/resquício cabe aqui).
+_SEARCH_WINDOW = 160
 
 # só pra LOCALIZAR onde "auto translate" começa (dentro da janela inicial).
 _COMMAND_START = re.compile(r"auto[\s\-]+translate", re.IGNORECASE)
