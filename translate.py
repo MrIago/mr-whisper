@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """auto-translate do mr-whisper.
 
-Se a transcrição começa com "auto translate {idioma}", traduz o RESTO pro idioma
-pedido (via Groq/OpenRouter — ver cloud.py) antes de colar. Senão, devolve o
-texto intacto. Falha de tradução nunca te deixa sem nada: cai pro texto original.
+Se "auto translate {idioma}" aparece no começo da transcrição (não precisa ser
+o caractere 0 — o whisper às vezes deixa um resquício antes, tipo "é... auto
+translate spanish ..."), descartamos tudo que vem ANTES do comando e traduzimos
+tudo que vem DEPOIS do idioma (via Groq/OpenRouter — ver cloud.py) antes de
+colar. Senão, devolve o texto intacto. Falha de tradução nunca te deixa sem
+nada: cai pro texto original.
 
 Exemplos que disparam:
-  "auto translate spanish. hello world"      → "hola mundo"
-  "Auto translate to português, good night"  → "boa noite"
-  "auto translate japonês meu nome é iago"   → tradução em japonês
+  "auto translate spanish. hello world"          → "hola mundo"
+  "é, auto translate to português, good night"   → "boa noite"  (resquício cortado)
+  "auto translate japonês meu nome é iago"       → tradução em japonês
 """
 from __future__ import annotations
 
@@ -16,10 +19,17 @@ import re
 
 import cloud
 
+# Janela do começo onde procuramos o gatilho (resquício do whisper cabe aqui).
+_SEARCH_WINDOW = 100
+
+# só pra LOCALIZAR onde "auto translate" começa (dentro da janela inicial).
+_COMMAND_START = re.compile(r"auto[\s\-]+translate", re.IGNORECASE)
+
 # "auto translate" tolerante a: caixa, hífen, pontuação que o whisper insere,
 # e conectores opcionais (to / para / pra). Captura idioma e o restante.
+# Aplicado com .match(text, pos) → ancora na posição do comando (sem ^).
 _TRIGGER = re.compile(
-    r"""^\s*auto[\s\-]+translate          # "auto translate" / "auto-translate"
+    r"""auto[\s\-]+translate              # "auto translate" / "auto-translate"
                                            #   (exige separador → "autotranslate" não vale)
         [\s,:;.]+                          # pontuação/espaço após o comando
         (?:(?:to|para|pra)\s+)?            # conector opcional ("to"/"para"/"pra")
@@ -32,8 +42,16 @@ _TRIGGER = re.compile(
 
 
 def parse(text: str) -> tuple[str, str] | None:
-    """Retorna (idioma, conteúdo) se o texto começa com o gatilho; senão None."""
-    m = _TRIGGER.match(text or "")
+    """Retorna (idioma, conteúdo) se o gatilho aparece nos primeiros ~100 chars;
+    senão None. Tudo antes do comando é descartado; traduz tudo após o idioma."""
+    text = text or ""
+    # localiza o início de "auto translate" só na janela inicial — assim um
+    # "auto translate" dito no meio de uma fala longa (não comando) não dispara.
+    head = _COMMAND_START.search(text[:_SEARCH_WINDOW])
+    if not head:
+        return None
+    # aplica o gatilho a partir do comando, sobre o texto COMPLETO (rest inteiro).
+    m = _TRIGGER.match(text, head.start())
     if not m:
         return None
     lang = m.group("lang").strip()
