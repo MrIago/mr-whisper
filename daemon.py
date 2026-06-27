@@ -31,6 +31,7 @@ import evdev
 from evdev import ecodes
 
 import config
+import dump
 import translate
 
 # ---- config ----
@@ -380,6 +381,13 @@ class VoiceFlow:
             if text is None:  # cancelado
                 return
             log(f"transcrito ({time.time()-t0:.1f}s): {text!r}")
+            # dump: se a fala começa com "new dump"/"novo dump", salva a nota no
+            # arquivo de dump em vez de colar. Não toca no clipboard.
+            note = dump.parse(text) if text else None
+            if note is not None:
+                dump.save(note, log=log)
+                self.widget.send("hide")
+                return
             # auto-translate: se o texto começa com "auto translate {idioma}",
             # traduz o resto antes de colar (Groq/OpenRouter). Falha → original.
             if text and translate.parse(text):

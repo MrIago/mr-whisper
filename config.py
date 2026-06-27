@@ -14,6 +14,8 @@ Chaves/prefs conhecidas:
 - OPENROUTER_KEY      — tradução via OpenRouter (modelo barato, ex: Gemini Flash)
 - MRWHISPER_STT       — backend de transcrição: "local" (faster-whisper) | "groq"
 - MRWHISPER_TRANSLATE — backend de tradução: "groq" | "openrouter"
+- MRWHISPER_DUMP_FILE  — arquivo de notas do comando "new dump" (default:
+                         ~/Documentos/Notas/dump.md)
 """
 from __future__ import annotations
 

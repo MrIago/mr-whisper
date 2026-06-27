@@ -107,6 +107,22 @@ your original words are pasted instead — you never lose the dictation.
 
 Keys and preferences are stored in `~/.config/mr-whisper/.env` (private).
 
+### Quick notes — "new dump"
+
+Start your dictation with **"new dump"** (or **"novo dump"**) and the rest isn't
+pasted — it's appended, with a timestamp, to your personal notes file. Perfect
+for jotting a quick idea mid-task without leaving the window:
+
+> _"new dump — cache the transcription by wav hash"_ → appends to `dump.md`:
+> `- [2026-06-27 20:23] cache the transcription by wav hash`
+
+Point it at your file with `MRWHISPER_DUMP_FILE` (default
+`~/Documentos/Notas/dump.md`). The folder is created if missing.
+
+```bash
+python config.py MRWHISPER_DUMP_FILE=/path/to/your/notes.md
+```
+
 ## Configuration
 
 | Env var | Default | Description |
@@ -120,6 +136,7 @@ Keys and preferences are stored in `~/.config/mr-whisper/.env` (private).
 | `MRWHISPER_TRANSLATE` | `groq` | auto-translate backend: `groq` or `openrouter` |
 | `GROQ_API_KEY` | — | cloud transcription and/or translation ([get one](https://console.groq.com/keys)) |
 | `OPENROUTER_KEY` | — | translation via OpenRouter ([get one](https://openrouter.ai/keys)) |
+| `MRWHISPER_DUMP_FILE` | `~/Documentos/Notas/dump.md` | notes file for the "new dump" command |
 
 > These are usually set by `python setup.py` (saved to `~/.config/mr-whisper/.env`), but env vars override the file.
 
@@ -127,6 +144,7 @@ Keys and preferences are stored in `~/.config/mr-whisper/.env` (private).
 
 - [x] Cloud transcription via Groq (no GPU required)
 - [x] Auto-translate ("auto translate {language}" → translated before paste)
+- [x] Quick notes ("new dump" → appended to your notes file instead of pasted)
 - [ ] Cross-platform: Windows (NVIDIA/CUDA) and macOS (whisper.cpp + Metal)
 - [ ] Wayland support (`ydotool`/portal-based input)
 - [ ] Configurable hotkey + tray settings UI
