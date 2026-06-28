@@ -105,7 +105,8 @@ def setup_transcription() -> str:
         choice = ask_choice(
             "GPU + faster-whisper prontos. Como transcrever?",
             {
-                "local": "local — offline, na sua GPU (privado, sem custo)",
+                "instant": "instant — modelo pequeno, sensação imediata (boa precisão)",
+                "pro": "pro — large-v3-turbo, máxima precisão (um pouco mais lento)",
                 "groq": "groq — nuvem (grátis ~8h/dia; útil se quiser poupar a GPU)",
             },
         )
@@ -121,7 +122,8 @@ def setup_transcription() -> str:
         "\nO que fazer agora?",
         {
             "groq": "usar Groq agora (nuvem) — funciona já",
-            "local": "vou instalar o que falta e usar local (re-rode depois)",
+            "instant": "vou instalar o que falta e usar local instant (re-rode depois)",
+            "pro": "vou instalar o que falta e usar local pro (re-rode depois)",
         },
     )
     if choice == "groq":

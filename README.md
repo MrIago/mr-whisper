@@ -75,6 +75,19 @@ python setup.py --status # show current config
 It is **deterministic**: it detects whether you have an NVIDIA GPU and
 `faster-whisper`, and only asks what makes sense for your machine.
 
+### Three transcription modes
+
+Pick the speed/accuracy trade-off with `MRWHISPER_STT`:
+
+| Mode | Model | Feel | Accuracy |
+|---|---|---|---|
+| `instant` | `small` (multilingual) | near-instant | good — great for notes/commands |
+| `pro` | `large-v3-turbo` | ~0.5–1s | maximum |
+| `groq` | cloud | network-bound | maximum, no GPU |
+
+`instant` is roughly 2–3× faster than `pro` on the same audio. Both run locally
+on your GPU; the model downloads on first use.
+
 ### No GPU? Transcribe in the cloud (Groq)
 
 Local transcription needs an NVIDIA GPU + CUDA. If you don't have one, the setup
@@ -132,7 +145,7 @@ python config.py MRWHISPER_DUMP_FILE=/path/to/your/notes.md
 | `VOICEFLOW_COMPUTE` | `int8_float16` | compute type |
 | `VOICEFLOW_MIC` | `default` | ALSA/PipeWire capture device |
 | `VOICEFLOW_PASTE` | `ctrl+shift+v` | paste shortcut |
-| `MRWHISPER_STT` | `local` | transcription backend: `local` (faster-whisper) or `groq` |
+| `MRWHISPER_STT` | `pro` | transcription mode: `instant` (small), `pro` (large-v3-turbo), or `groq` (cloud) |
 | `MRWHISPER_TRANSLATE` | `groq` | auto-translate backend: `groq` or `openrouter` |
 | `GROQ_API_KEY` | — | cloud transcription and/or translation ([get one](https://console.groq.com/keys)) |
 | `OPENROUTER_KEY` | — | translation via OpenRouter ([get one](https://openrouter.ai/keys)) |

@@ -17,12 +17,29 @@ import sys
 import socket
 import signal
 
-MODEL_NAME = os.environ.get("VOICEFLOW_MODEL", "large-v3-turbo")
-MODEL_ID = os.environ.get(
-    "VOICEFLOW_MODEL_ID", "deepdml/faster-whisper-large-v3-turbo-ct2"
+try:
+    import config as _cfg  # lê env + ~/.config/mr-whisper/.env
+    _get = _cfg.get
+except Exception:  # standalone, sem o config.py ao lado
+    _get = lambda name, default=None: os.environ.get(name, default)
+
+# Modo local → modelo. "instant" usa um modelo pequeno (multilíngue pt/en) com
+# sensação imediata; "pro" usa o large-v3-turbo (máxima precisão). O modo vem de
+# MRWHISPER_STT (instant|pro|local); "local" = pro (compat). VOICEFLOW_MODEL_ID
+# sempre vence, pra override manual.
+_MODE_MODELS = {
+    "instant": "Systran/faster-whisper-small",
+    "pro": "deepdml/faster-whisper-large-v3-turbo-ct2",
+    "local": "deepdml/faster-whisper-large-v3-turbo-ct2",
+}
+_MODE = (_get("MRWHISPER_STT", "pro") or "pro").lower()
+
+MODEL_NAME = _get("VOICEFLOW_MODEL", _MODE)
+MODEL_ID = _get(
+    "VOICEFLOW_MODEL_ID", _MODE_MODELS.get(_MODE, _MODE_MODELS["pro"])
 )
-DEVICE = os.environ.get("VOICEFLOW_DEVICE", "cuda")
-COMPUTE_TYPE = os.environ.get("VOICEFLOW_COMPUTE", "int8_float16")
+DEVICE = _get("VOICEFLOW_DEVICE", "cuda")
+COMPUTE_TYPE = _get("VOICEFLOW_COMPUTE", "int8_float16")
 SERVE_SOCK = "/tmp/mr-whisper-asr.sock"
 
 

@@ -328,7 +328,7 @@ def _set_clipboard(text: str) -> None:
 class VoiceFlow:
     def __init__(self) -> None:
         self.widget = Widget()
-        stt = (config.get("MRWHISPER_STT", "local") or "local").lower()
+        stt = (config.get("MRWHISPER_STT", "pro") or "pro").lower()
         if stt == "groq":
             self.asr = CloudASRClient()
         else:
