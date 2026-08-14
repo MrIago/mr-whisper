@@ -7,4 +7,4 @@
 #   Accessibility + Input Monitoring (pynput) e Microphone (sounddevice).
 set -e
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
-exec python3 "$HERE/daemon.py"
+exec python3 "$HERE/app.py"

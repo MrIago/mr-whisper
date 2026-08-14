@@ -23,54 +23,51 @@ Wispr Flow is great but it's paid (~$15/mo) and has no Linux build. I wanted the
 ## How it works
 
 ```
+app.py       tray app (Qt): system tray, Settings window, the floating pill,
+             and the hotkey listener on a thread — one process
 core/        portable logic — config, cloud STT, LLM commands, quick-notes
 platforms/   per-OS I/O behind one interface (audio · hotkey · paste)
   ├─ linux.py    arecord · evdev · xclip/xdotool (X11)
-  ├─ macos.py    sounddevice · pynput · pbcopy + Cmd+V
+  ├─ macos.py    sounddevice · pynput · clipboard + Cmd+V
   └─ windows.py  sounddevice · pynput · clipboard + Ctrl+V
-widget_qt.py floating pill (PySide6/Qt) — live waveform, then a spinner
-daemon.py    thin orchestrator: detects the OS, wires core + platform + widget
+ui/          Qt widgets — the pill (waveform/spinner) and the Settings screen
 ```
 
-The daemon talks only to the platform interface, so the same flow runs
-everywhere. Transcription is cloud-only (no GPU, no local model) — that's what
-makes it work identically on the three OSes. **Text delivery** is clipboard +
-paste (instant even for long text).
+The app talks only to the platform interface, so the same flow runs everywhere.
+Transcription is cloud-only (no GPU, no local model) — that's what makes it work
+identically on the three OSes. **Text delivery** is clipboard + paste (instant
+even for long text).
 
-## Requirements
+## Install
 
-- Python 3.10+
-- A cloud key for transcription (any one): **Groq** (free tier — recommended), OpenAI, or OpenRouter.
-- I/O libraries (all OSes):
+**No Python needed** — grab the installer for your OS from the
+[latest release](https://github.com/MrIago/mr-whisper/releases/latest):
+
+| OS | Download | Run |
+|---|---|---|
+| macOS | `mr-whisper-macos.dmg` | open the `.dmg`, drag to Applications, launch |
+| Windows | `mr-whisper-windows.zip` | unzip, run `mr-whisper.exe` |
+| Linux | `mr-whisper-linux.tar.gz` | extract, run `./mr-whisper` |
+
+A 🎙️ icon appears in your tray. First launch opens **Settings** — pick a
+provider and paste your key (get a free Groq one right from that screen). Then
+just hold `Ctrl+Alt+Space`, speak, release.
+
+**Permissions (once):**
+- **macOS** → Accessibility, Input Monitoring, Microphone (System Settings → Privacy & Security).
+- **Linux** → be in the `input` group (`sudo usermod -aG input $USER`, then re-login) and have `xclip`/`xdotool` installed.
+
+## Run from source (developers)
 
 ```bash
-pip install PySide6 sounddevice pynput pyperclip requests
+pip install -r requirements.txt
+python app.py             # tray app (Settings / Pause / Quit)
+python setup.py           # optional: configure from the terminal instead
 ```
 
-**Linux** also uses X11 tools and evdev (raw key access needs the `input` group):
-
-```bash
-sudo apt install xdotool xclip
-sudo usermod -aG input $USER   # then re-login
-```
-
-**macOS**: grant Terminal (or your launcher) **Accessibility**, **Input
-Monitoring** and **Microphone** in System Settings → Privacy & Security.
-
-## Setup
-
-```bash
-python setup.py          # pick STT provider, paste + validate your key
-python setup.py --status # show current config
-```
-
-## Run
-
-```bash
-bash run/start-linux.sh        # Linux — systemd --user service
-bash run/start-macos.sh        # macOS — foreground (LaunchAgent for autostart)
-run\start-windows.ps1          # Windows — foreground (Task Scheduler for autostart)
-```
+Linux extras: `sudo apt install xdotool xclip` and be in the `input` group.
+Autostart helpers live in `run/` (systemd `--user` on Linux, a LaunchAgent
+plist on macOS, a PowerShell/Task-Scheduler note on Windows).
 
 **Usage:** hold `Ctrl+Alt+Space`, speak, release. `ESC` cancels mid-transcription.
 

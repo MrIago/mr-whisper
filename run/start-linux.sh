@@ -7,4 +7,4 @@ systemctl --user import-environment DISPLAY XAUTHORITY XDG_RUNTIME_DIR DBUS_SESS
 systemctl --user stop mr-whisper 2>/dev/null || true
 exec systemd-run --user --unit=mr-whisper --collect \
   --setenv=DISPLAY="${DISPLAY:-:1}" \
-  "$(command -v python3)" "$HERE/daemon.py"
+  "$(command -v python3)" "$HERE/app.py"

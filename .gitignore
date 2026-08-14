@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 .remotion-study/
 .vscode/
+build/
+dist/
