@@ -124,13 +124,13 @@ Same idea as auto-translate, but they **stay in your language**:
 
 - **"auto context"** — rewrites what follows to read naturally and hit the right
   tone/register for the situation. Speak context first (never pasted):
-  > _"texting my boss about a raise, auto context, e aí, bora aumentar meu salário?"_
-  > → pastes **"Gostaria de discutir a possibilidade de um aumento salarial."**
+  > _"texting my boss about a raise, auto context, hey man, let's bump up my salary?"_
+  > → pastes **"I'd like to discuss the possibility of a salary adjustment."**
 - **"auto adjust"** — the lightest touch: strips filler and speech tics
-  (_"é, tipo, né, uh"_), fixes punctuation and grammar, but **keeps your words
-  and meaning**:
-  > _"auto adjust, é, tipo assim, então, né, a gente precisa entregar até sexta"_
-  > → pastes **"A gente precisa entregar até sexta."**
+  (_"uh, um, like, you know"_), fixes punctuation and grammar, but **keeps your
+  words and meaning**:
+  > _"auto adjust, so, uh, like, the thing is, you know, we need to ship this by friday"_
+  > → pastes **"The thing is, we need to ship this by Friday."**
 
 All three (`translate` / `context` / `adjust`) share the same LLM and fall back
 to your original words on any failure. Keywords are tolerant (case, hyphen,
