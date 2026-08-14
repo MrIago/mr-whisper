@@ -18,8 +18,10 @@ jobs:
         include:
           - os: ubuntu-latest
             asset: mr-whisper-linux.tar.gz
-          - os: macos-latest
-            asset: mr-whisper-macos.dmg
+          - os: macos-14           # Apple Silicon (M1/M2/M3)
+            asset: mr-whisper-macos-arm64.dmg
+          - os: macos-13           # Intel Mac (x86_64)
+            asset: mr-whisper-macos-intel.dmg
           - os: windows-latest
             asset: mr-whisper-windows.zip
     runs-on: ${{ matrix.os }}
@@ -54,7 +56,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           hdiutil create -volname mr-whisper -srcfolder "dist/mr-whisper.app" \
-            -ov -format UDZO mr-whisper-macos.dmg
+            -ov -format UDZO "${{ matrix.asset }}"
 
       - name: Package Windows (.zip)
         if: runner.os == 'Windows'
