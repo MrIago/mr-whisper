@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import re
 
-import cloud
+from . import cloud
 
 # ── auto translate {idioma} — captura o idioma-alvo + a mensagem ──────────────
 _TRANSLATE = re.compile(

@@ -1,13 +1,12 @@
 # mr-whisper 🎙️
 
-**System-wide voice dictation for Linux — local, free, and private.** A [Wispr Flow](https://wisprflow.ai/) alternative for Linux (which Wispr doesn't support).
+**System-wide voice dictation — cross-platform, free-tier, private-ish.** A [Wispr Flow](https://wisprflow.ai/) alternative that runs on **Linux, macOS and Windows**.
 
-Hold a hotkey, speak, release. Your speech is transcribed on your GPU with [`faster-whisper`](https://github.com/SYSTRAN/faster-whisper) and pasted into whatever text field is focused — terminal, editor, browser, any app. No cloud, no API keys, no subscription. Your audio never leaves your machine.
+Hold a hotkey, speak, release. Your speech is transcribed in the cloud (Groq / OpenAI / OpenRouter — your key, your choice) and pasted into whatever text field is focused — terminal, editor, browser, any app. On top of plain dictation it can **translate**, **rewrite for tone**, **clean up filler**, or **save quick notes** — all by voice.
 
 ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
-![Platform](https://img.shields.io/badge/platform-Linux%2FX11-orange.svg)
+![Platform](https://img.shields.io/badge/platform-Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-orange.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
-![GPU](https://img.shields.io/badge/whisper-faster--whisper%20(local)-purple.svg)
 
 ---
 
@@ -15,86 +14,79 @@ Hold a hotkey, speak, release. Your speech is transcribed on your GPU with [`fas
 
 https://github.com/user-attachments/assets/d6d28e50-0b61-4729-8d9e-31074602c61e
 
-> _Hold `Ctrl+Alt+Space`, speak in Portuguese or English (mixed is fine), release. The text appears where your cursor is._ ▸ 🎤 waveform reacts to your voice ▸ ⟳ transcribing on your GPU ▸ ✓ text pasted at the cursor.
+> _Hold `Ctrl+Alt+Space`, speak in Portuguese or English (mixed is fine), release. The text appears where your cursor is._ ▸ 🎤 waveform reacts to your voice ▸ ⟳ transcribing ▸ ✓ text pasted at the cursor.
 
 ## Why
 
-Wispr Flow is great but it's paid (~$15/mo), cloud-based, and has no Linux build. I wanted the same "press, talk, it types" experience — but running fully offline on my own GPU, for free. So I built it.
+Wispr Flow is great but it's paid (~$15/mo) and has no Linux build. I wanted the same "press, talk, it types" experience on every OS I use — for free, on Groq's generous free tier — plus voice commands Wispr doesn't have (translate, rewrite, quick-notes). So I built it.
 
 ## How it works
 
-Three decoupled processes so the UI never freezes during the heavy work:
+```
+core/        portable logic — config, cloud STT, LLM commands, quick-notes
+platforms/   per-OS I/O behind one interface (audio · hotkey · paste)
+  ├─ linux.py    arecord · evdev · xclip/xdotool (X11)
+  ├─ macos.py    sounddevice · pynput · pbcopy + Cmd+V
+  └─ windows.py  sounddevice · pynput · clipboard + Ctrl+V
+widget_qt.py floating pill (PySide6/Qt) — live waveform, then a spinner
+daemon.py    thin orchestrator: detects the OS, wires core + platform + widget
+```
 
-| Component | Role |
-|---|---|
-| **`daemon.py`** | Reads the keyboard via `evdev` (real hold-to-talk: press *and* release — GNOME shortcuts only give you press). Owns state + the widget. Never loads the model. |
-| **`transcribe_worker.py`** | Separate process keeping the `faster-whisper` model hot on the GPU, served over a Unix socket. Isolating it means transcription never blocks the keyboard listener or the UI. |
-| **`widget.py`** | Floating GTK pill: live waveform driven by the mic's RMS, then a spinner while transcribing. |
-
-**Text delivery** is via clipboard + `Ctrl+Shift+V` (works in terminals *and* GUI apps, instant even for long text — synthetic `xdotool type` froze the X server on long passages).
-
-### Notable engineering details
-
-- **Hold-to-talk on X11** needs raw `evdev` access — GNOME's `gsettings` shortcuts can't detect key *release*.
-- **Model stays hot** in a dedicated process; first word has no load latency, and the GIL-heavy inference can't stall the input loop.
-- **Auto language detection** (pt/en) so code-switching mid-sentence just works.
-- **Graceful GPU→CPU fallback**, and `ESC` cancels an in-flight transcription (kills the worker, frees VRAM, restarts it).
-- Tuned for a **4GB GPU**: `large-v3-turbo` at `int8_float16` fits in ~1.9GB at RTF ≈ 0.18×.
+The daemon talks only to the platform interface, so the same flow runs
+everywhere. Transcription is cloud-only (no GPU, no local model) — that's what
+makes it work identically on the three OSes. **Text delivery** is clipboard +
+paste (instant even for long text).
 
 ## Requirements
 
-- **NVIDIA GPU** (tested on a GTX 1650 4GB; falls back to CPU automatically)
-- Linux **X11** session (Wayland blocks synthetic input; a Wayland path is on the roadmap)
-- User in the `input` group (for evdev): `sudo usermod -aG input $USER` then **re-login**
+- Python 3.10+
+- A cloud key for transcription (any one): **Groq** (free tier — recommended), OpenAI, or OpenRouter.
+- I/O libraries (all OSes):
 
 ```bash
-pip install --break-system-packages faster-whisper evdev
-sudo apt install python3-gi gir1.2-gtk-3.0 xdotool xclip
+pip install PySide6 sounddevice pynput pyperclip requests
+```
+
+**Linux** also uses X11 tools and evdev (raw key access needs the `input` group):
+
+```bash
+sudo apt install xdotool xclip
+sudo usermod -aG input $USER   # then re-login
+```
+
+**macOS**: grant Terminal (or your launcher) **Accessibility**, **Input
+Monitoring** and **Microphone** in System Settings → Privacy & Security.
+
+## Setup
+
+```bash
+python setup.py          # pick STT provider, paste + validate your key
+python setup.py --status # show current config
 ```
 
 ## Run
 
 ```bash
-bash start.sh        # starts as a systemd --user service
+bash run/start-linux.sh        # Linux — systemd --user service
+bash run/start-macos.sh        # macOS — foreground (LaunchAgent for autostart)
+run\start-windows.ps1          # Windows — foreground (Task Scheduler for autostart)
 ```
-
-Auto-start on login is installed at `~/.config/autostart/mr-whisper.desktop`.
-Logs: `journalctl --user -u mr-whisper -f`.
 
 **Usage:** hold `Ctrl+Alt+Space`, speak, release. `ESC` cancels mid-transcription.
 
-## Setup (optional): cloud STT + auto-translate
+## Voice features
 
-Run the interactive, cross-platform setup once to enable two extras:
+### Transcription providers
 
-```bash
-python setup.py          # detects your env, asks what you need, validates keys
-python setup.py --status # show current config
-```
+Pick one with `MRWHISPER_STT_PROVIDER` (or in `setup.py`):
 
-It is **deterministic**: it detects whether you have an NVIDIA GPU and
-`faster-whisper`, and only asks what makes sense for your machine.
+| Provider | Endpoint | Notes |
+|---|---|---|
+| `groq` | Whisper `large-v3-turbo` | **free tier ~8h/day**, fast, great multilingual — recommended |
+| `openai` | Whisper `whisper-1` | paid |
+| `openrouter` | Gemini (multimodal) | pay-per-use, one key for STT + commands |
 
-### Three transcription modes
-
-Pick the speed/accuracy trade-off with `MRWHISPER_STT`:
-
-| Mode | Model | Feel | Accuracy |
-|---|---|---|---|
-| `instant` | `small` (multilingual) | near-instant | good — great for notes/commands |
-| `pro` | `large-v3-turbo` | ~0.5–1s | maximum |
-| `groq` | cloud | network-bound | maximum, no GPU |
-
-`instant` is roughly 2–3× faster than `pro` on the same audio. Both run locally
-on your GPU; the model downloads on first use.
-
-### No GPU? Transcribe in the cloud (Groq)
-
-Local transcription needs an NVIDIA GPU + CUDA. If you don't have one, the setup
-sends you straight to **Groq** — free (~8h/day), no GPU, runs on `whisper-large-v3-turbo`
-in the cloud. Get a key at [console.groq.com/keys](https://console.groq.com/keys);
-the setup validates it before saving. (If you *do* have a GPU, you can still
-choose Groq to spare your VRAM.)
+All cloud, so no GPU and identical behavior on every OS.
 
 ### Auto-translate
 
@@ -151,40 +143,38 @@ Point it at your file with `MRWHISPER_DUMP_FILE` (default
 `~/Documentos/Notas/dump.md`). The folder is created if missing.
 
 ```bash
-python config.py MRWHISPER_DUMP_FILE=/path/to/your/notes.md
+python -m core.config MRWHISPER_DUMP_FILE=/path/to/your/notes.md
 ```
 
 ## Configuration
 
 | Env var | Default | Description |
 |---|---|---|
-| `VOICEFLOW_MODEL_ID` | `deepdml/faster-whisper-large-v3-turbo-ct2` | faster-whisper model |
-| `VOICEFLOW_DEVICE` | `cuda` | `cuda` or `cpu` |
-| `VOICEFLOW_COMPUTE` | `int8_float16` | compute type |
-| `VOICEFLOW_MIC` | `default` | ALSA/PipeWire capture device |
-| `VOICEFLOW_PASTE` | `ctrl+shift+v` | paste shortcut |
-| `MRWHISPER_STT` | `pro` | transcription mode: `instant` (small), `pro` (large-v3-turbo), or `groq` (cloud) |
-| `MRWHISPER_TRANSLATE` | `groq` | auto-translate backend: `groq` or `openrouter` |
-| `GROQ_API_KEY` | — | cloud transcription and/or translation ([get one](https://console.groq.com/keys)) |
-| `OPENROUTER_KEY` | — | translation via OpenRouter ([get one](https://openrouter.ai/keys)) |
+| `MRWHISPER_STT_PROVIDER` | auto | `groq`, `openai`, or `openrouter` (auto = first key found) |
+| `MRWHISPER_TRANSLATE` | auto | LLM backend for voice commands: `groq` or `openrouter` |
+| `GROQ_API_KEY` | — | Groq STT and/or commands ([get one](https://console.groq.com/keys)) |
+| `OPENAI_API_KEY` | — | OpenAI STT ([get one](https://platform.openai.com/api-keys)) |
+| `OPENROUTER_KEY` | — | OpenRouter STT and/or commands ([get one](https://openrouter.ai/keys)) |
 | `MRWHISPER_DUMP_FILE` | `~/Documentos/Notas/dump.md` | notes file for the "new dump" command |
+| `VOICEFLOW_MIC` | `default` | Linux only — ALSA capture device for `arecord` |
+| `VOICEFLOW_PASTE` | `ctrl+shift+v` | Linux only — paste shortcut for `xdotool` |
 
 > These are usually set by `python setup.py` (saved to `~/.config/mr-whisper/.env`), but env vars override the file.
 
 ## Roadmap
 
-- [x] Cloud transcription via Groq (no GPU required)
+- [x] Cloud transcription (Groq / OpenAI / OpenRouter — no GPU)
 - [x] Auto-translate ("auto translate {language}" → translated before paste)
 - [x] Rewrite commands ("auto context" adapts tone · "auto adjust" cleans filler)
 - [x] Quick notes ("new dump" → appended to your notes file instead of pasted)
-- [ ] Cross-platform: Windows (NVIDIA/CUDA) and macOS (whisper.cpp + Metal)
+- [x] Cross-platform: Linux, macOS, Windows (one platform interface)
 - [ ] Wayland support (`ydotool`/portal-based input)
 - [ ] Configurable hotkey + tray settings UI
 - [ ] Push-to-talk vs toggle modes
 
 ## Tech stack
 
-Python · faster-whisper / CTranslate2 · evdev · GTK3 (PyGObject) · ALSA (arecord) · xdotool/xclip · systemd
+Python · Groq / OpenAI / OpenRouter (cloud STT + LLM) · PySide6 (Qt widget) · pynput · sounddevice · pyperclip · evdev / arecord / xdotool (Linux path) · systemd / LaunchAgent / Task Scheduler
 
 ## License
 

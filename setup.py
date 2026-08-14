@@ -1,27 +1,29 @@
 #!/usr/bin/env python3
-"""Setup interativo do mr-whisper — multiplataforma (Windows/Linux/Mac).
+"""Setup interativo do mr-whisper — cross-platform (Linux/macOS/Windows).
 
-Roda determinístico: detecta o ambiente, decide o que perguntar, valida as
-chaves de verdade antes de salvar. Fluxo:
+Só nuvem: escolhe o provider de transcrição (Groq / OpenAI / OpenRouter), valida
+a chave com um request real, e configura o backend dos comandos de LLM
+(translate/context/adjust). Sem GPU, sem modelo local.
 
-1. Transcrição: detecta GPU (nvidia-smi) e se faster-whisper está instalado.
-   - Sem GPU                → nem oferece local; vai direto pro Groq (nuvem).
-   - GPU + tudo pronto      → pergunta: local (offline) ou Groq.
-   - GPU mas falta algo     → mostra os comandos exatos por OS p/ instalar,
-                              e oferece Groq agora (ou local depois de instalar).
-2. Se escolher Groq: pede GROQ_API_KEY e VALIDA com um request real.
-3. Tradução (auto-translate): pergunta se reusa a mesma chave Groq ou usa
-   OpenRouter; valida a chave escolhida.
+  python setup.py            # fluxo interativo
+  python setup.py --status   # mostra a config atual
 
-Tudo salvo em ~/.config/mr-whisper/.env (ver config.py). Re-rode quando quiser.
+Tudo salvo em ~/.config/mr-whisper/.env (ver core/config.py).
 """
 from __future__ import annotations
 
-import shutil
-import subprocess
 import sys
 
-import config
+from core import config, cloud
+
+PROVIDERS = {
+    "groq": ("GROQ_API_KEY", "https://console.groq.com/keys",
+             "grátis ~8h/dia, rápido, ótimo multilíngue", cloud.validate_groq),
+    "openai": ("OPENAI_API_KEY", "https://platform.openai.com/api-keys",
+               "whisper-1 / gpt-4o-transcribe (pago)", cloud.validate_openai),
+    "openrouter": ("OPENROUTER_KEY", "https://openrouter.ai/keys",
+                   "modelo multimodal (Gemini) via OpenRouter", cloud.validate_openrouter),
+}
 
 
 def ask(prompt: str) -> str:
@@ -33,182 +35,88 @@ def ask(prompt: str) -> str:
 
 
 def ask_choice(prompt: str, options: dict[str, str]) -> str:
-    """Pergunta com opções rotuladas (key→descrição). Retorna a key escolhida."""
     print(prompt)
     keys = list(options)
     for i, k in enumerate(keys, 1):
         print(f"  {i}) {options[k]}")
     while True:
-        ans = ask("> ").lower()
-        if ans in options:
-            return ans
-        if ans.isdigit() and 1 <= int(ans) <= len(keys):
-            return keys[int(ans) - 1]
+        a = ask("> ").lower()
+        if a in options:
+            return a
+        if a.isdigit() and 1 <= int(a) <= len(keys):
+            return keys[int(a) - 1]
         print("opção inválida.")
 
 
-# ---- detecção de ambiente ----
+def setup_key(provider: str) -> bool:
+    """Pede e valida a chave do provider (se ainda não houver uma válida)."""
+    key_name, url, _desc, validate = PROVIDERS[provider]
+    existing = config.get(key_name)
+    if existing:
+        ok, why = validate(existing)
+        if ok:
+            print(f"✓ {key_name} já configurada e válida.")
+            return True
+        print(f"{key_name} existente não validou ({why}). Vamos trocar.")
+    print(f"\nPegue a chave em: {url}")
+    while True:
+        key = ask(f"Cole a {key_name}: ")
+        if not key:
+            print("vazio — tente de novo.")
+            continue
+        ok, why = validate(key)
+        if ok:
+            config.set_values({key_name: key})
+            print(f"✓ {key_name} válida e salva.")
+            return True
+        print(f"✗ {why} — tente de novo.")
 
-def has_gpu() -> bool:
-    if not shutil.which("nvidia-smi"):
-        return False
-    try:
-        r = subprocess.run(["nvidia-smi"], capture_output=True, timeout=5)
-        return r.returncode == 0
-    except (subprocess.SubprocessError, OSError):
-        return False
-
-
-def has_faster_whisper() -> bool:
-    try:
-        import faster_whisper  # noqa: F401
-        return True
-    except Exception:
-        return False
-
-
-def install_hints() -> None:
-    """Comandos por OS pra deixar a transcrição local pronta (GPU+CUDA)."""
-    print("\nPra usar a transcrição LOCAL você precisa de:")
-    print("  • faster-whisper (pip)")
-    print("  • CUDA runtime compatível com a sua GPU NVIDIA\n")
-    print("Instale o pacote Python (todos os OS):")
-    print("  pip install faster-whisper\n")
-    if sys.platform.startswith("linux"):
-        print("CUDA no Linux: instale o toolkit da sua distro ou via NVIDIA:")
-        print("  https://developer.nvidia.com/cuda-downloads")
-    elif sys.platform == "win32":
-        print("CUDA no Windows: baixe o instalador NVIDIA:")
-        print("  https://developer.nvidia.com/cuda-downloads")
-        print("  (e o driver NVIDIA mais recente)")
-    elif sys.platform == "darwin":
-        print("⚠️  macOS não tem CUDA (sem GPU NVIDIA). Use a transcrição via Groq.")
-    print("\nDepois de instalar, re-rode: python setup.py")
-
-
-# ---- passos ----
 
 def setup_transcription() -> str:
-    """Configura o backend de transcrição. Retorna 'local' ou 'groq'."""
-    print("\n── 1/2 · Transcrição ──")
-    gpu = has_gpu()
-    fw = has_faster_whisper()
-
-    if not gpu:
-        print("Nenhuma GPU NVIDIA detectada → transcrição LOCAL não compensa.")
-        print("Vamos usar o Groq (nuvem, grátis ~8h/dia, sem GPU).")
-        setup_groq_key()
-        config.set_values({"MRWHISPER_STT": "groq"})
-        return "groq"
-
-    if gpu and fw:
-        choice = ask_choice(
-            "GPU + faster-whisper prontos. Como transcrever?",
-            {
-                "instant": "instant — modelo pequeno, sensação imediata (boa precisão)",
-                "pro": "pro — large-v3-turbo, máxima precisão (um pouco mais lento)",
-                "groq": "groq — nuvem (grátis ~8h/dia; útil se quiser poupar a GPU)",
-            },
-        )
-        if choice == "groq":
-            setup_groq_key()
-        config.set_values({"MRWHISPER_STT": choice})
-        return choice
-
-    # GPU mas falta faster-whisper (ou CUDA)
-    print("GPU detectada, mas a transcrição local ainda não está pronta.")
-    install_hints()
-    choice = ask_choice(
-        "\nO que fazer agora?",
-        {
-            "groq": "usar Groq agora (nuvem) — funciona já",
-            "instant": "vou instalar o que falta e usar local instant (re-rode depois)",
-            "pro": "vou instalar o que falta e usar local pro (re-rode depois)",
-        },
+    print("\n── 1/2 · Transcrição (nuvem) ──")
+    provider = ask_choice(
+        "Qual provider pra transcrever?",
+        {k: f"{k} — {PROVIDERS[k][2]}" for k in PROVIDERS},
     )
-    if choice == "groq":
-        setup_groq_key()
-    config.set_values({"MRWHISPER_STT": choice})
-    return choice
+    setup_key(provider)
+    config.set_values({"MRWHISPER_STT_PROVIDER": provider})
+    return provider
 
 
-def setup_groq_key() -> None:
-    """Pede e valida a GROQ_API_KEY (se ainda não houver uma válida)."""
-    import cloud
-
-    existing = config.get("GROQ_API_KEY")
-    if existing:
-        ok, why = cloud.validate_groq(existing)
-        if ok:
-            print("✓ GROQ_API_KEY já configurada e válida.")
-            return
-        print(f"GROQ_API_KEY existente não validou ({why}). Vamos trocar.")
-
-    print("\nPegue uma chave grátis em: https://console.groq.com/keys")
-    while True:
-        key = ask("Cole a GROQ_API_KEY: ")
-        if not key:
-            print("vazio — tente de novo.")
-            continue
-        ok, why = cloud.validate_groq(key)
-        if ok:
-            config.set_values({"GROQ_API_KEY": key})
-            print("✓ GROQ_API_KEY válida e salva.")
-            return
-        print(f"✗ {why} — tente de novo.")
-
-
-def setup_openrouter_key() -> None:
-    import cloud
-
-    print("\nPegue uma chave em: https://openrouter.ai/keys")
-    while True:
-        key = ask("Cole a OPENROUTER_KEY: ")
-        if not key:
-            print("vazio — tente de novo.")
-            continue
-        ok, why = cloud.validate_openrouter(key)
-        if ok:
-            config.set_values({"OPENROUTER_KEY": key})
-            print("✓ OPENROUTER_KEY válida e salva.")
-            return
-        print(f"✗ {why} — tente de novo.")
-
-
-def setup_translation(stt_backend: str) -> None:
-    """Configura o backend de tradução do auto-translate."""
-    print("\n── 2/2 · Tradução (auto-translate) ──")
-    print('Diga "auto translate {idioma}" no início da fala pra traduzir antes de colar.')
-
-    has_groq = bool(config.get("GROQ_API_KEY"))
-    if has_groq:
+def setup_llm(stt_provider: str) -> None:
+    """Backend dos comandos auto translate/context/adjust (Groq ou OpenRouter)."""
+    print("\n── 2/2 · Comandos de voz (translate / context / adjust) ──")
+    print('Ex: "auto translate english ...", "auto context ...", "auto adjust ...".')
+    # se o provider de STT já serve de LLM (groq/openrouter), reusa por padrão.
+    if stt_provider in ("groq", "openrouter"):
         choice = ask_choice(
-            "Qual backend pra traduzir?",
-            {
-                "groq": "Groq — reusa a chave que você já configurou (llama-3.1-8b)",
-                "openrouter": "OpenRouter — modelo barato dedicado (ex: Gemini Flash)",
-            },
+            "Qual backend pros comandos de LLM?",
+            {stt_provider: f"{stt_provider} — reusa a chave que você já configurou",
+             "other": "escolher outro"},
         )
+        backend = stt_provider if choice == stt_provider else None
     else:
-        print("Sem chave Groq → tradução via OpenRouter.")
-        choice = "openrouter"
+        backend = None
 
-    if choice == "openrouter" and not config.get("OPENROUTER_KEY"):
-        setup_openrouter_key()
-    if choice == "groq" and not config.get("GROQ_API_KEY"):
-        setup_groq_key()
+    if backend is None:
+        backend = ask_choice("Backend do LLM:", {
+            "groq": "Groq — llama-3.3-70b (rápido, grátis)",
+            "openrouter": "OpenRouter — Gemini Flash",
+        })
+        setup_key(backend)
 
-    config.set_values({"MRWHISPER_TRANSLATE": choice})
-    print(f"✓ tradução via {choice}.")
+    config.set_values({"MRWHISPER_TRANSLATE": backend})
+    print(f"✓ comandos de LLM via {backend}.")
 
 
 def status() -> None:
-    print("\n── mr-whisper · configuração atual ──")
+    print("\n── mr-whisper · configuração ──")
     print(f"  arquivo: {config.CONFIG_FILE}")
-    print(f"  transcrição (MRWHISPER_STT):   {config.get('MRWHISPER_STT', '(não definido)')}")
-    print(f"  tradução   (MRWHISPER_TRANSLATE): {config.get('MRWHISPER_TRANSLATE', '(não definido)')}")
-    print(f"  GROQ_API_KEY:  {'✅' if config.get('GROQ_API_KEY') else '⚪'}")
-    print(f"  OPENROUTER_KEY: {'✅' if config.get('OPENROUTER_KEY') else '⚪'}")
+    print(f"  STT provider (MRWHISPER_STT_PROVIDER): {config.get('MRWHISPER_STT_PROVIDER', '(auto)')}")
+    print(f"  LLM backend  (MRWHISPER_TRANSLATE):    {config.get('MRWHISPER_TRANSLATE', '(auto)')}")
+    for _, (key_name, *_rest) in PROVIDERS.items():
+        print(f"  {key_name}: {'✅' if config.get(key_name) else '⚪'}")
+    print(f"  dump file (MRWHISPER_DUMP_FILE): {config.get('MRWHISPER_DUMP_FILE', '~/Documentos/Notas/dump.md')}")
 
 
 def main() -> int:
@@ -216,12 +124,13 @@ def main() -> int:
         status()
         return 0
     print("╭─ mr-whisper setup ─────────────────────────────╮")
-    print("│ transcrição (local/Groq) + auto-translate      │")
+    print("│ cloud STT (groq/openai/openrouter) + commands  │")
     print("╰────────────────────────────────────────────────╯")
-    stt = setup_transcription()
-    setup_translation(stt)
+    provider = setup_transcription()
+    setup_llm(provider)
     status()
-    print("\n✓ Tudo pronto. Inicie o daemon com: ./start.sh  (ou python daemon.py)")
+    print("\n✓ Pronto. Inicie: run/start-<seu-os>.  (Linux: bash run/start-linux.sh)")
+    print("  Instale as libs de I/O: pip install PySide6 sounddevice pynput pyperclip")
     return 0
 
 

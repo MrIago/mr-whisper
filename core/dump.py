@@ -18,7 +18,7 @@ import re
 import time
 from pathlib import Path
 
-import config
+from . import config
 
 # "new dump" / "novo dump" no começo (tolerante a caixa, pontuação do whisper e
 # ao whisper grudar "newdump"). Captura o resto como a nota.

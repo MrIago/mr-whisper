@@ -10,19 +10,27 @@ nuvem (LLM barato). Tudo lê as chaves de config.get (env ou ~/.config/.env).
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import requests
 
-from config import get
+from .config import get
 
 GROQ_STT_ENDPOINT = "https://api.groq.com/openai/v1/audio/transcriptions"
 GROQ_CHAT_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODELS_ENDPOINT = "https://api.groq.com/openai/v1/models"
 OPENAI_STT_ENDPOINT = "https://api.openai.com/v1/audio/transcriptions"
+OPENAI_MODELS_ENDPOINT = "https://api.openai.com/v1/models"
 OPENROUTER_CHAT_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 
+# modelos default por provider (override por env)
 GROQ_STT_MODEL = get("MRWHISPER_GROQ_STT_MODEL", "whisper-large-v3-turbo")
+OPENAI_STT_MODEL = get("MRWHISPER_OPENAI_STT_MODEL", "whisper-1")
+# OpenRouter não tem endpoint whisper dedicado — usa um modelo multimodal
+# (áudio→texto) via chat. Gemini flash-lite é barato e multilíngue.
+OPENROUTER_STT_MODEL = get("MRWHISPER_OR_STT_MODEL", "google/gemini-2.5-flash-lite")
+
 GROQ_LLM_MODEL = get("MRWHISPER_GROQ_LLM_MODEL", "llama-3.3-70b-versatile")
 OPENROUTER_LLM_MODEL = get("MRWHISPER_OR_MODEL", "google/gemini-2.5-flash")
 
@@ -34,6 +42,23 @@ def validate_groq(key: str) -> tuple[bool, str]:
     try:
         r = requests.get(
             GROQ_MODELS_ENDPOINT,
+            headers={"Authorization": f"Bearer {key}"},
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        return False, f"falha de rede: {exc}"
+    if r.status_code == 200:
+        return True, ""
+    if r.status_code == 401:
+        return False, "chave inválida (401)"
+    return False, f"HTTP {r.status_code}: {r.text[:120]}"
+
+
+def validate_openai(key: str) -> tuple[bool, str]:
+    """True + '' se a chave OpenAI autentica."""
+    try:
+        r = requests.get(
+            OPENAI_MODELS_ENDPOINT,
             headers={"Authorization": f"Bearer {key}"},
             timeout=15,
         )
@@ -63,36 +88,93 @@ def validate_openrouter(key: str) -> tuple[bool, str]:
     return False, f"HTTP {r.status_code}: {r.text[:120]}"
 
 
-# ---- transcrição na nuvem ----
+# ---- transcrição na nuvem (3 provedores) ----
 
-def transcribe_cloud(wav_path: str) -> str:
-    """Transcreve um wav via Groq (ou OpenAI). Lança em erro de config/HTTP."""
+def _resolve_stt_provider() -> str:
+    """Provider de transcrição: MRWHISPER_STT_PROVIDER (groq|openai|openrouter).
+    Se não setado, escolhe pela 1ª chave disponível (groq > openai > openrouter)."""
+    p = (get("MRWHISPER_STT_PROVIDER") or "").lower()
+    if p in ("groq", "openai", "openrouter"):
+        return p
     if get("GROQ_API_KEY"):
-        endpoint, key, model = GROQ_STT_ENDPOINT, get("GROQ_API_KEY"), GROQ_STT_MODEL
-        backend = "groq"
-    elif get("OPENAI_API_KEY"):
-        endpoint, key, model = OPENAI_STT_ENDPOINT, get("OPENAI_API_KEY"), "whisper-1"
-        backend = "openai"
-    else:
-        raise RuntimeError(
-            "transcrição na nuvem precisa de GROQ_API_KEY (ou OPENAI_API_KEY). "
-            "Rode: python setup.py"
-        )
+        return "groq"
+    if get("OPENAI_API_KEY"):
+        return "openai"
+    if get("OPENROUTER_KEY"):
+        return "openrouter"
+    raise RuntimeError(
+        "transcrição precisa de uma chave (GROQ_API_KEY, OPENAI_API_KEY ou "
+        "OPENROUTER_KEY). Rode: python setup.py"
+    )
 
+
+def _stt_whisper_endpoint(endpoint: str, key: str, model: str, wav_path: str,
+                          backend: str) -> str:
+    """POST multipart pro endpoint estilo Whisper (Groq/OpenAI)."""
     name = os.path.basename(wav_path)
     with open(wav_path, "rb") as f:
         files = {"file": (name, f, "audio/wav")}
         data = {"model": model, "response_format": "json", "temperature": "0"}
         r = requests.post(
-            endpoint,
-            headers={"Authorization": f"Bearer {key}"},
-            files=files,
-            data=data,
-            timeout=120,
+            endpoint, headers={"Authorization": f"Bearer {key}"},
+            files=files, data=data, timeout=120,
         )
     if not r.ok:
         raise RuntimeError(f"STT {backend} HTTP {r.status_code}: {r.text[:160]}")
     return (r.json().get("text") or "").strip()
+
+
+def _stt_openrouter(key: str, model: str, wav_path: str) -> str:
+    """OpenRouter não tem endpoint whisper — manda o áudio (base64) num chat
+    multimodal e pede a transcrição literal."""
+    with open(wav_path, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode("ascii")
+    body = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content":
+             "You are a speech-to-text engine. Transcribe the audio VERBATIM in "
+             "its spoken language. Output ONLY the transcription — no notes, no "
+             "translation, no quotes."},
+            {"role": "user", "content": [
+                {"type": "text", "text": "Transcribe this audio."},
+                {"type": "input_audio",
+                 "input_audio": {"data": b64, "format": "wav"}},
+            ]},
+        ],
+        "temperature": 0,
+    }
+    r = requests.post(
+        OPENROUTER_CHAT_ENDPOINT,
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json",
+                 "HTTP-Referer": "https://github.com/MrIago/mr-whisper",
+                 "X-Title": "mr-whisper"},
+        data=json.dumps(body), timeout=120,
+    )
+    if not r.ok:
+        raise RuntimeError(f"STT openrouter HTTP {r.status_code}: {r.text[:160]}")
+    d = r.json()
+    return (d["choices"][0]["message"]["content"] or "").strip()
+
+
+def transcribe_cloud(wav_path: str) -> str:
+    """Transcreve um wav pelo provider configurado. Lança em erro de config/HTTP."""
+    provider = _resolve_stt_provider()
+    if provider == "groq":
+        key = get("GROQ_API_KEY")
+        if not key:
+            raise RuntimeError("STT groq precisa de GROQ_API_KEY. Rode: python setup.py")
+        return _stt_whisper_endpoint(GROQ_STT_ENDPOINT, key, GROQ_STT_MODEL, wav_path, "groq")
+    if provider == "openai":
+        key = get("OPENAI_API_KEY")
+        if not key:
+            raise RuntimeError("STT openai precisa de OPENAI_API_KEY. Rode: python setup.py")
+        return _stt_whisper_endpoint(OPENAI_STT_ENDPOINT, key, OPENAI_STT_MODEL, wav_path, "openai")
+    # openrouter
+    key = get("OPENROUTER_KEY")
+    if not key:
+        raise RuntimeError("STT openrouter precisa de OPENROUTER_KEY. Rode: python setup.py")
+    return _stt_openrouter(key, OPENROUTER_STT_MODEL, wav_path)
 
 
 # ---- tradução na nuvem ----

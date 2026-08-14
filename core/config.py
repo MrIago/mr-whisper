@@ -10,12 +10,13 @@ Windows/Linux/Mac sem editar o shell.
   python config.py                             # lista o que está salvo
 
 Chaves/prefs conhecidas:
-- GROQ_API_KEY        — transcrição na nuvem (sem GPU) e/ou tradução
-- OPENROUTER_KEY      — tradução via OpenRouter (modelo barato, ex: Gemini Flash)
-- MRWHISPER_STT       — backend de transcrição: "local" (faster-whisper) | "groq"
-- MRWHISPER_TRANSLATE — backend de tradução: "groq" | "openrouter"
-- MRWHISPER_DUMP_FILE  — arquivo de notas do comando "new dump" (default:
-                         ~/Documentos/Notas/dump.md)
+- GROQ_API_KEY          — transcrição e/ou tradução via Groq
+- OPENAI_API_KEY        — transcrição e/ou tradução via OpenAI
+- OPENROUTER_KEY        — transcrição e/ou tradução via OpenRouter
+- MRWHISPER_STT_PROVIDER — provider de transcrição: "groq" | "openai" | "openrouter"
+- MRWHISPER_TRANSLATE   — backend dos comandos LLM: "groq" | "openrouter"
+- MRWHISPER_DUMP_FILE   — arquivo de notas do comando "new dump" (default:
+                          ~/Documentos/Notas/dump.md)
 """
 from __future__ import annotations
 
