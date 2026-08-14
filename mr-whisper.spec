@@ -2,13 +2,8 @@
 # Build local:  pyinstaller mr-whisper.spec
 # O CI (.github/workflows/build.yml) roda isto em Linux/macOS/Windows e empacota
 # o resultado em AppImage / .dmg / .exe.
-import os
 import sys
 from PyInstaller.utils.hooks import collect_submodules
-
-# macOS: buildar universal2 (Intel + Apple Silicon) num só binário, via env do CI.
-# Fora do macOS o valor é ignorado.
-_TARGET_ARCH = os.environ.get("MRW_MAC_ARCH") or None
 
 hidden = []
 # platforms/ é importado dinamicamente por sys.platform → força a inclusão.
@@ -37,7 +32,6 @@ exe = EXE(
     name="mr-whisper",
     console=False,           # app de bandeja, sem janela de terminal
     disable_windowed_traceback=False,
-    target_arch=_TARGET_ARCH,  # universal2 no CI macOS; None nos outros
     icon=None,
 )
 coll = COLLECT(
