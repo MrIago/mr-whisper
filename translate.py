@@ -1,22 +1,23 @@
 #!/usr/bin/env python3
-"""auto-translate do mr-whisper.
+"""Comandos de voz do mr-whisper que passam a fala por um LLM antes de colar.
 
-Quando você diz "auto translate {idioma}" na fala, o LLM:
-1. trata TUDO que vem antes do comando como CONTEXTO/instrução (ex: "vou
-   responder uma pessoa no LinkedIn") — usa pra acertar tom/registro, mas
-   nunca coloca isso na saída;
-2. traduz o que vem DEPOIS do idioma de forma ADAPTADA (localização natural):
-   troca expressões por equivalentes idiomáticos, ajusta o registro
-   (técnico/formal/casual) ao contexto detectado — não traduz literal.
+Três comandos, todos com a mesma ideia: o que você fala ANTES do comando é
+CONTEXTO (ajusta tom/registro, nunca é colado); o que vem DEPOIS é a mensagem
+processada. Detecção tolerante (caixa, hífen, pontuação do whisper, PT/EN).
 
-O regex aqui só DETECTA o gatilho e o idioma; o trabalho de separar
-contexto/mensagem e adaptar fica com o LLM (ver cloud.py).
+- "auto translate {idioma} ..."  → traduz/localiza pro idioma (troca idioma).
+- "auto context ..."             → reescreve no MESMO idioma, adaptando tom ao
+                                    contexto (não traduz).
+- "auto adjust ..."              → só limpa: tira vícios de fala, ajusta
+                                    pontuação/gramática, mantém a mensagem.
 
-Falha de tradução nunca te deixa sem nada: cai pro texto original.
+O regex só DETECTA o comando; o trabalho fica no LLM (ver cloud.py). Falha
+(rede/chave) nunca te deixa sem nada: cai pra mensagem original.
 
 Exemplos:
-  "auto translate spanish, bom dia pessoal"                 → "buenos días a todos"
-  "vou responder no LinkedIn, auto translate inglês, ..."   → tom profissional, EN
+  "auto translate spanish, bom dia pessoal"        → "buenos días a todos"
+  "vou responder no LinkedIn, auto context, e aí"  → mesma língua, tom profissional
+  "auto adjust, é, tipo, então o lance é o seguinte" → "Então, o lance é o seguinte."
 """
 from __future__ import annotations
 
@@ -24,11 +25,9 @@ import re
 
 import cloud
 
-# Detecta "auto translate {idioma}" + captura idioma e onde o comando começa.
-# Tolerante a caixa, hífen, pontuação do whisper e conector opcional (to/para/pra).
-_TRIGGER = re.compile(
-    r"""auto[\s\-]*translate              # "auto translate"/"auto-translate"/"autotranslate"
-                                           #   (o whisper às vezes gruda tudo)
+# ── auto translate {idioma} — captura o idioma-alvo + a mensagem ──────────────
+_TRANSLATE = re.compile(
+    r"""auto[\s\-]*translate              # "auto translate"/"autotranslate"
         [\s,:;.]+                          # pontuação/espaço após o comando
         (?:(?:to|para|pra)\s+)?            # conector opcional
         (?P<lang>[^\s,.:;!?]+)             # idioma = 1 palavra (spanish, japonês…)
@@ -38,48 +37,88 @@ _TRIGGER = re.compile(
     re.IGNORECASE | re.VERBOSE | re.DOTALL,
 )
 
+# ── auto context / auto adjust — só a mensagem depois do comando ──────────────
+# "context": aceita context/contexto/contextualize/contextualiza (EN/PT).
+_CONTEXT = re.compile(
+    r"""auto[\s\-]*context(?:o|ualize|ualiza|ualise)?
+        [\s,:;.!?]+
+        (?P<rest>.+)$
+    """,
+    re.IGNORECASE | re.VERBOSE | re.DOTALL,
+)
+# "adjust": aceita adjust/ajuste/ajusta/ajustar.
+_ADJUST = re.compile(
+    r"""auto[\s\-]*(?:adjust|ajust(?:e|a|ar)?)
+        [\s,:;.!?]+
+        (?P<rest>.+)$
+    """,
+    re.IGNORECASE | re.VERBOSE | re.DOTALL,
+)
 
-def parse(text: str) -> tuple[str, str, str] | None:
-    """Se houver gatilho na fala, retorna (idioma, contexto, mensagem):
-    - idioma  : idioma-alvo falado
-    - contexto: tudo dito ANTES do comando (instrução pro LLM; pode ser "")
-    - mensagem: tudo DEPOIS do idioma (o que será traduzido/adaptado)
-    Senão, None."""
+
+def parse(text: str) -> dict | None:
+    """Detecta o 1º comando que aparecer na fala. Retorna um dict:
+    {kind: 'translate'|'context'|'adjust', context, message[, lang]} ou None.
+
+    `context` = tudo antes do comando (nunca colado). `message` = tudo depois.
+    Se houver mais de um comando, vence o que aparece PRIMEIRO na fala."""
     text = (text or "").strip()
-    # "auto translate" é um termo que não se fala à toa → dispara onde aparecer,
-    # sem limite de janela. Tudo antes vira contexto; tudo após o idioma, mensagem.
-    m = _TRIGGER.search(text)
-    if not m:
+    if not text:
         return None
-    lang = m.group("lang").strip()
+
+    candidates = []
+    if (m := _TRANSLATE.search(text)):
+        candidates.append((m.start(), "translate", m))
+    if (m := _CONTEXT.search(text)):
+        candidates.append((m.start(), "context", m))
+    if (m := _ADJUST.search(text)):
+        candidates.append((m.start(), "adjust", m))
+    if not candidates:
+        return None
+
+    start, kind, m = min(candidates, key=lambda c: c[0])
     rest = m.group("rest").strip()
-    context = text[: m.start()].strip()
-    if not lang or not rest:
+    if not rest:
         return None
-    return lang, context, rest
+    ctx = text[:start].strip()
+    out = {"kind": kind, "context": ctx, "message": rest}
+    if kind == "translate":
+        lang = m.group("lang").strip()
+        if not lang:
+            return None
+        out["lang"] = lang
+    return out
 
 
-def maybe_translate(text: str, log=print) -> str:
-    """Aplica auto-translate se o gatilho estiver presente. Sempre retorna texto
-    colável: a tradução adaptada em sucesso, ou a mensagem original em falha."""
-    parsed = parse(text)
-    if not parsed:
+def maybe_transform(text: str, log=print) -> str:
+    """Aplica o comando (translate/context/adjust) se houver. Sempre retorna
+    texto colável: o resultado em sucesso, ou a mensagem original em falha."""
+    p = parse(text)
+    if not p:
         return text
-    lang, context, rest = parsed
+    kind, ctx, msg = p["kind"], p["context"], p["message"]
     try:
-        out = cloud.translate_cloud(rest, lang, context=context)
+        if kind == "translate":
+            out = cloud.translate_cloud(msg, p["lang"], context=ctx)
+            tag = f"translate → {p['lang']}"
+        elif kind == "context":
+            out = cloud.context_cloud(msg, context=ctx)
+            tag = "context"
+        else:
+            out = cloud.adjust_cloud(msg)
+            tag = "adjust"
         if out:
-            log(f"auto-translate → {lang} (ctx={context!r}): {out!r}")
+            log(f"auto-{tag} (ctx={ctx!r}): {out!r}")
             return out
-        log("auto-translate retornou vazio — colando original")
+        log(f"auto-{kind} retornou vazio — colando original")
     except Exception as exc:  # rede/key/HTTP — nunca derruba o ditado
-        log(f"auto-translate falhou ({exc}) — colando original")
-    return rest
+        log(f"auto-{kind} falhou ({exc}) — colando original")
+    return msg
 
 
-# CLI de teste: python translate.py "auto translate spanish hello world"
+# CLI de teste: python translate.py "auto adjust é tipo isso aí"
 if __name__ == "__main__":
     import sys
 
     s = " ".join(sys.argv[1:]) or "auto translate spanish hello world"
-    print(maybe_translate(s))
+    print(maybe_transform(s))

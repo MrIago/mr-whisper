@@ -388,11 +388,11 @@ class VoiceFlow:
                 dump.save(note, log=log)
                 self.widget.send("hide")
                 return
-            # auto-translate: se o texto começa com "auto translate {idioma}",
-            # traduz o resto antes de colar (Groq/OpenRouter). Falha → original.
+            # comandos de LLM: "auto translate/context/adjust" transformam o
+            # texto antes de colar (Groq/OpenRouter). Falha → mensagem original.
             if text and translate.parse(text):
-                self.widget.send("transcribing")  # mantém o dock durante a tradução
-                text = translate.maybe_translate(text, log=log)
+                self.widget.send("transcribing")  # mantém o dock durante o LLM
+                text = translate.maybe_transform(text, log=log)
             # esconde o dock antes de colar e cola — sem animação de paste
             # (o xdotool congela o X e travava o shimmer; não compensava).
             self.widget.send("hide")

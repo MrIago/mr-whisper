@@ -118,6 +118,24 @@ It runs through a cheap LLM. By default it **reuses your Groq key**
 Gemini Flash) if you prefer. If the translation call fails (offline / no key),
 your original words are pasted instead — you never lose the dictation.
 
+### Rewrite in place — "auto context" & "auto adjust"
+
+Same idea as auto-translate, but they **stay in your language**:
+
+- **"auto context"** — rewrites what follows to read naturally and hit the right
+  tone/register for the situation. Speak context first (never pasted):
+  > _"texting my boss about a raise, auto context, e aí, bora aumentar meu salário?"_
+  > → pastes **"Gostaria de discutir a possibilidade de um aumento salarial."**
+- **"auto adjust"** — the lightest touch: strips filler and speech tics
+  (_"é, tipo, né, uh"_), fixes punctuation and grammar, but **keeps your words
+  and meaning**:
+  > _"auto adjust, é, tipo assim, então, né, a gente precisa entregar até sexta"_
+  > → pastes **"A gente precisa entregar até sexta."**
+
+All three (`translate` / `context` / `adjust`) share the same LLM and fall back
+to your original words on any failure. Keywords are tolerant (case, hyphen,
+glued, and PT variants like "auto contexto" / "auto ajusta").
+
 Keys and preferences are stored in `~/.config/mr-whisper/.env` (private).
 
 ### Quick notes — "new dump"
@@ -157,6 +175,7 @@ python config.py MRWHISPER_DUMP_FILE=/path/to/your/notes.md
 
 - [x] Cloud transcription via Groq (no GPU required)
 - [x] Auto-translate ("auto translate {language}" → translated before paste)
+- [x] Rewrite commands ("auto context" adapts tone · "auto adjust" cleans filler)
 - [x] Quick notes ("new dump" → appended to your notes file instead of pasted)
 - [ ] Cross-platform: Windows (NVIDIA/CUDA) and macOS (whisper.cpp + Metal)
 - [ ] Wayland support (`ydotool`/portal-based input)
