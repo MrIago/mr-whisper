@@ -18,10 +18,11 @@ jobs:
         include:
           - os: ubuntu-latest
             asset: mr-whisper-linux.tar.gz
-          - os: macos-14           # Apple Silicon (M1/M2/M3)
-            asset: mr-whisper-macos-arm64.dmg
-          - os: macos-13           # Intel Mac (x86_64)
-            asset: mr-whisper-macos-intel.dmg
+          # um único .dmg universal2 (Intel + Apple Silicon) no runner ARM, que
+          # está sempre disponível — evita o runner macos-13 (Intel) congestionado.
+          - os: macos-14
+            asset: mr-whisper-macos.dmg
+            mac_arch: universal2
           - os: windows-latest
             asset: mr-whisper-windows.zip
     runs-on: ${{ matrix.os }}
@@ -45,6 +46,8 @@ jobs:
           sudo apt-get install -y libegl1 libxcb-cursor0 xclip xdotool
 
       - name: Build (PyInstaller)
+        env:
+          MRW_MAC_ARCH: ${{ matrix.mac_arch }}
         run: pyinstaller --noconfirm mr-whisper.spec
 
       # ── empacotar por OS ────────────────────────────────────────────────────
