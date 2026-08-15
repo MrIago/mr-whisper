@@ -62,11 +62,14 @@ jobs:
           # Homebrew x86_64 (sob Rosetta) + Python x86_64
           arch -x86_64 /usr/local/bin/brew --version >/dev/null 2>&1 || \
             arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-          arch -x86_64 /usr/local/bin/brew install python@3.11
+          # install pode reclamar de link já existente (Python nativo) — tolera
+          arch -x86_64 /usr/local/bin/brew install python@3.11 || true
           PY=/usr/local/opt/python@3.11/bin/python3.11
-          arch -x86_64 $PY -m pip install --upgrade pip
-          arch -x86_64 $PY -m pip install -r requirements.txt pyinstaller
-          arch -x86_64 $PY -m PyInstaller --noconfirm mr-whisper.spec
+          # confirma que é x86_64 de fato
+          arch -x86_64 "$PY" -c "import platform; print('build arch:', platform.machine())"
+          arch -x86_64 "$PY" -m pip install --upgrade pip
+          arch -x86_64 "$PY" -m pip install -r requirements.txt pyinstaller
+          arch -x86_64 "$PY" -m PyInstaller --noconfirm mr-whisper.spec
 
       # ── empacotar por OS ────────────────────────────────────────────────────
       - name: Package Linux
