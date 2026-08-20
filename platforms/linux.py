@@ -157,7 +157,7 @@ class EvdevHotkey:
                     pass
 
 
-# ── paste — detecta Wayland vs X11 e usa as ferramentas certas ────────────────
+# ── paste, detecta Wayland vs X11 e usa as ferramentas certas ────────────────
 def _is_wayland() -> bool:
     return bool(os.environ.get("WAYLAND_DISPLAY")) or \
         os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland"
@@ -174,7 +174,7 @@ class LinuxDelivery:
     - Paste sintético: ydotool/wtype (Wayland) ou xdotool (X11). No GNOME
       Wayland a injeção de teclas costuma ser bloqueada; se nenhuma ferramenta
       de paste funciona, o texto fica no clipboard e retornamos False de
-      `deliver` pra o app avisar "copiado — cole com Ctrl+V".
+      `deliver` pra o app avisar "copiado, cole com Ctrl+V".
     """
 
     def __init__(self) -> None:
@@ -211,12 +211,12 @@ class LinuxDelivery:
     def _paste_wayland(self, shortcut: str) -> bool:
         keys = shortcut.split("+")  # ex: ["ctrl","v"] ou ["ctrl","shift","v"]
         # ydotool: injeta via uinput. Precisa de acesso ao /dev/uinput (grupo
-        # input + udev rule) — ver run/setup-linux-wayland.sh.
+        # input + udev rule), ver run/setup-linux-wayland.sh.
         if _have("ydotool"):
             code = {"ctrl": 29, "shift": 42, "v": 47}
             press = [f"{code[k]}:1" for k in keys if k in code]
             release = [f"{code[k]}:0" for k in reversed(keys) if k in code]
-            # aponta pro socket do ydotoold (serviço --user), se existir — sem o
+            # aponta pro socket do ydotoold (serviço --user), se existir, sem o
             # daemon o ydotool é errático. --key-delay dá tempo do compositor
             # registrar o Ctrl+V.
             env = dict(os.environ)

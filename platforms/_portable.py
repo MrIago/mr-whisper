@@ -26,7 +26,7 @@ def _log(msg: str) -> None:
 # ── áudio (sounddevice → buffer → wav) ────────────────────────────────────────
 class SounddeviceRecorder:
     """Grava do mic em memória via sounddevice (PortAudio) e escreve o wav no
-    stop(). O nível (RMS) sai direto de cada bloco — sem ler arquivo parcial."""
+    stop(). O nível (RMS) sai direto de cada bloco, sem ler arquivo parcial."""
 
     def __init__(self, on_level: Callable[[float], None]) -> None:
         self.on_level = on_level
@@ -132,7 +132,7 @@ class PynputHotkey:
                 return
             self._update()
 
-        _log("escutando teclado (pynput) — Ctrl+Alt+Espaço")
+        _log("escutando teclado (pynput), Ctrl+Alt+Espaço")
         with kb.Listener(on_press=on_press, on_release=on_release) as listener:
             listener.join()
 

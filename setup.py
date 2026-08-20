@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Setup interativo do mr-whisper — cross-platform (Linux/macOS/Windows).
+"""Setup interativo do mr-whisper, cross-platform (Linux/macOS/Windows).
 
 Só nuvem: escolhe o provider de transcrição (Groq / OpenAI / OpenRouter), valida
 a chave com um request real, e configura o backend dos comandos de LLM
@@ -62,21 +62,21 @@ def setup_key(provider: str) -> bool:
     while True:
         key = ask(f"Cole a {key_name}: ")
         if not key:
-            print("vazio — tente de novo.")
+            print("vazio, tente de novo.")
             continue
         ok, why = validate(key)
         if ok:
             config.set_values({key_name: key})
             print(f"✓ {key_name} válida e salva.")
             return True
-        print(f"✗ {why} — tente de novo.")
+        print(f"✗ {why}, tente de novo.")
 
 
 def setup_transcription() -> str:
     print("\n── 1/2 · Transcrição (nuvem) ──")
     provider = ask_choice(
         "Qual provider pra transcrever?",
-        {k: f"{k} — {PROVIDERS[k][2]}" for k in PROVIDERS},
+        {k: f"{k}, {PROVIDERS[k][2]}" for k in PROVIDERS},
     )
     setup_key(provider)
     config.set_values({"MRWHISPER_STT_PROVIDER": provider})
@@ -91,7 +91,7 @@ def setup_llm(stt_provider: str) -> None:
     if stt_provider in ("groq", "openrouter"):
         choice = ask_choice(
             "Qual backend pros comandos de LLM?",
-            {stt_provider: f"{stt_provider} — reusa a chave que você já configurou",
+            {stt_provider: f"{stt_provider}, reusa a chave que você já configurou",
              "other": "escolher outro"},
         )
         backend = stt_provider if choice == stt_provider else None
@@ -100,8 +100,8 @@ def setup_llm(stt_provider: str) -> None:
 
     if backend is None:
         backend = ask_choice("Backend do LLM:", {
-            "groq": "Groq — llama-3.3-70b (rápido, grátis)",
-            "openrouter": "OpenRouter — Gemini Flash",
+            "groq": "Groq, llama-3.3-70b (rápido, grátis)",
+            "openrouter": "OpenRouter, Gemini Flash",
         })
         setup_key(backend)
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Config do mr-whisper — lê/grava chaves e preferências de forma multiplataforma.
+"""Config do mr-whisper, lê/grava chaves e preferências de forma multiplataforma.
 
 Espelha o padrão da skill `studio` (config.mjs): segredos e prefs ficam em
 `~/.config/mr-whisper/.env` (privado), com fallback pra variável de ambiente.
@@ -10,17 +10,17 @@ Windows/Linux/Mac sem editar o shell.
   python config.py                             # lista o que está salvo
 
 Chaves/prefs conhecidas:
-- GROQ_API_KEY          — transcrição e/ou tradução via Groq
-- OPENAI_API_KEY        — transcrição e/ou tradução via OpenAI
-- OPENROUTER_KEY        — transcrição e/ou tradução via OpenRouter
-- MRWHISPER_STT_PROVIDER — provider de transcrição: "groq" | "openai" | "openrouter"
-- MRWHISPER_LANG        — trava o idioma da transcrição (ex: "pt", "en"); vazio = auto
-- MRWHISPER_TRANSLATE   — backend dos comandos LLM: "groq" | "openrouter"
-- MRWHISPER_DUMP_FILE   — arquivo de notas do comando "new dump" (default:
+- GROQ_API_KEY         , transcrição e/ou tradução via Groq
+- OPENAI_API_KEY       , transcrição e/ou tradução via OpenAI
+- OPENROUTER_KEY       , transcrição e/ou tradução via OpenRouter
+- MRWHISPER_STT_PROVIDER, provider de transcrição: "groq" | "openai" | "openrouter"
+- MRWHISPER_LANG       , trava o idioma da transcrição (ex: "pt", "en"); vazio = auto
+- MRWHISPER_TRANSLATE  , backend dos comandos LLM: "groq" | "openrouter"
+- MRWHISPER_DUMP_FILE  , arquivo de notas do comando "new dump" (default:
                           ~/Documentos/Notas/dump.md)
-- MRWHISPER_PASTE_SHORTCUT — atalho de colar: "ctrl+v" (default) | "ctrl+shift+v"
-- MRWHISPER_AUTO_PASTE   — colar automático após transcrever: "1" (default) | "0"
-                          (se "0", só copia pro clipboard — você cola manualmente)
+- MRWHISPER_PASTE_SHORTCUT, atalho de colar: "ctrl+v" (default) | "ctrl+shift+v"
+- MRWHISPER_AUTO_PASTE  , colar automático após transcrever: "1" (default) | "0"
+                          (se "0", só copia pro clipboard, você cola manualmente)
 """
 from __future__ import annotations
 
@@ -64,7 +64,7 @@ def set_values(pairs: dict[str, str]) -> None:
         if v:
             cur[k] = v
     body = (
-        "# mr-whisper config — segredos e prefs, mantenha privado\n"
+        "# mr-whisper config, segredos e prefs, mantenha privado\n"
         + "\n".join(f"{k}={v}" for k, v in cur.items())
         + "\n"
     )
@@ -91,7 +91,7 @@ if __name__ == "__main__":
     else:
         cur = _read_file()
         if not cur:
-            print("(nada salvo ainda) — uso: python config.py GROQ_API_KEY=gsk_...")
+            print("(nada salvo ainda), uso: python config.py GROQ_API_KEY=gsk_...")
         else:
             for k in cur:
                 shown = "set" if "KEY" in k else cur[k]

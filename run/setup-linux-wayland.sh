@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Configura o auto-paste do mr-whisper no Linux WAYLAND (GNOME, KDE, etc).
 #
-# No Wayland o compositor bloqueia injeção de teclas sintéticas por segurança —
+# No Wayland o compositor bloqueia injeção de teclas sintéticas por segurança ,
 # xdotool não cola. A solução é o ydotool + seu daemon (ydotoold), que injeta
 # via /dev/uinput. Este script instala tudo e configura o acesso sem root.
 #
@@ -9,10 +9,10 @@
 # Em X11 você NÃO precisa disto (xclip/xdotool já funcionam).
 set -e
 
-echo "▸ mr-whisper — setup do auto-paste no Wayland"
+echo "▸ mr-whisper, setup do auto-paste no Wayland"
 
 # 1. ydotool com daemon. O pacote do Ubuntu (0.1.8) NÃO tem o daemon e é
-#    errático — compilamos a versão atual se o ydotoold não existir.
+#    errático, compilamos a versão atual se o ydotoold não existir.
 if ! command -v ydotoold >/dev/null 2>&1; then
   echo "▸ compilando ydotool (com daemon)…"
   sudo apt-get install -y git cmake gcc build-essential
@@ -39,7 +39,7 @@ sudo chmod 660 /dev/uinput 2>/dev/null || true
 mkdir -p "$HOME/.config/systemd/user"
 cat > "$HOME/.config/systemd/user/ydotoold.service" <<'EOF'
 [Unit]
-Description=ydotoold — daemon do ydotool (paste no Wayland)
+Description=ydotoold, daemon do ydotool (paste no Wayland)
 
 [Service]
 ExecStart=/usr/local/bin/ydotoold --socket-path=%t/.ydotool_socket --socket-own=%U:%G

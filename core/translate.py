@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Comandos de voz do mr-whisper — o executor.
+"""Comandos de voz do mr-whisper, o executor.
 
 Detecta um comando na fala (ver core/commands.py: built-in + customizados) e o
 executa antes de colar. O que vem ANTES da keyword é contexto (nunca colado); o
@@ -28,7 +28,7 @@ def parse(text: str) -> dict | None:
 def maybe_transform(text: str, log=print) -> str:
     """Executa o comando detectado. Sempre retorna texto colável (o resultado,
     ou a mensagem original em falha). Para 'dump', salva e retorna "" (nada a
-    colar) — o app trata string vazia como "não cola"."""
+    colar), o app trata string vazia como "não cola"."""
     p = commands.match(text)
     if not p:
         return text
@@ -48,9 +48,9 @@ def maybe_transform(text: str, log=print) -> str:
         if out:
             log(f"cmd {tag} (ctx={ctx!r}): {out!r}")
             return out
-        log(f"cmd {tag} retornou vazio — colando mensagem original")
-    except Exception as exc:  # rede/key/HTTP — nunca derruba o ditado
-        log(f"cmd {kind} falhou ({exc}) — colando mensagem original")
+        log(f"cmd {tag} retornou vazio, colando mensagem original")
+    except Exception as exc:  # rede/key/HTTP, nunca derruba o ditado
+        log(f"cmd {kind} falhou ({exc}), colando mensagem original")
     return msg
 
 

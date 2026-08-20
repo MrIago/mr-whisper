@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Comandos de voz do mr-whisper — built-in + customizados pelo usuário.
+"""Comandos de voz do mr-whisper, built-in + customizados pelo usuário.
 
 Um comando = palavras-chave (com sinônimos) + um tipo de ação. Você diz a
 palavra-chave no meio da fala; tudo ANTES vira contexto (ajuda o LLM, nunca é
@@ -7,13 +7,13 @@ colado), tudo DEPOIS é a mensagem processada.
 
 Tipos:
 - rewrite   → manda a mensagem pro LLM com o `prompt` do comando (reescrever,
-              limpar, formatar, resumir… — prompt livre). NÃO troca idioma salvo
+              limpar, formatar, resumir…, prompt livre). NÃO troca idioma salvo
               se o prompt pedir.
 - translate → traduz/localiza; a 1ª palavra depois da keyword é o idioma-alvo.
 - dump      → salva a mensagem no arquivo de notas em vez de colar.
 
 Os 4 comandos originais (auto translate/context/adjust, new dump) são os
-DEFAULTS — já vêm prontos, mas você pode editar keyword/prompt, desligar, ou
+DEFAULTS, já vêm prontos, mas você pode editar keyword/prompt, desligar, ou
 criar novos. Ficam em ~/.config/mr-whisper/commands.json; se o arquivo não
 existe, usamos os defaults (e o usuário nunca fica sem os comandos básicos).
 """
@@ -37,7 +37,7 @@ _CONTEXT_PROMPT = (
 _ADJUST_PROMPT = (
     "Lightly clean up the message in its OWN language: remove filler words and "
     "speech tics, fix punctuation and capitalization, correct obvious grammar "
-    "slips. Keep the same words and meaning — this is a cleanup, NOT a rewrite."
+    "slips. Keep the same words and meaning, this is a cleanup, NOT a rewrite."
 )
 
 # Comandos padrão (o usuário pode editar/desligar/adicionar por cima).

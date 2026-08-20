@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""dump do mr-whisper — captura rápida de notas por voz.
+"""dump do mr-whisper, captura rápida de notas por voz.
 
 Quando você começa a fala com "new dump" (ou "novo dump"), o resto NÃO vai pro
 clipboard: é anexado ao seu arquivo de dump (um markdown), com data/hora. Ideal
 pra jogar uma ideia/nota mental no meio de outra coisa, sem trocar de janela.
 
 Onde salva: config MRWHISPER_DUMP_FILE (ver config.py). Default:
-~/Documentos/Notas/dump.md — cada um aponta pro seu arquivo.
+~/Documentos/Notas/dump.md, cada um aponta pro seu arquivo.
 
 Exemplos que disparam:
   "new dump, lembrar de revisar o PR do auth amanhã"

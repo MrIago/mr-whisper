@@ -4,7 +4,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/MrIago/mr-whisper/main/run/install-mac.sh | bash
 set -e
 
-echo "▸ mr-whisper — instalação (macOS)"
+echo "▸ mr-whisper, instalação (macOS)"
 
 # 1. Homebrew (se faltar)
 if ! command -v brew >/dev/null 2>&1; then

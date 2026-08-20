@@ -12,10 +12,21 @@ from PySide6 import QtCore, QtWidgets
 from core import commands
 
 TYPES = [
-    ("rewrite", "Rewrite — apply the prompt to what you said"),
-    ("translate", "Translate — first word after the keyword is the target language"),
-    ("dump", "Save note — append to your notes file instead of pasting"),
+    ("rewrite", "Rewrite (apply the prompt to what you said)"),
+    ("translate", "Translate (first word after the keyword is the target language)"),
+    ("dump", "Save note (append to your notes file instead of pasting)"),
 ]
+
+# explicação de cada tipo, mostrada no topo da janela
+TYPE_HELP = (
+    "<b>Rewrite</b>: runs your prompt on what you said. "
+    "Write the prompt yourself (\"rewrite as a formal email\", "
+    "\"summarize in 3 bullets\", \"fix grammar\").<br>"
+    "<b>Translate</b>: the first word you say after the keyword is the target "
+    "language, and the rest is translated into it.<br>"
+    "<b>Save note</b>: appends what you say to your notes file instead of "
+    "pasting it (great for quick reminders)."
+)
 
 
 class CommandsWindow(QtWidgets.QWidget):
@@ -33,12 +44,20 @@ class CommandsWindow(QtWidgets.QWidget):
 
         intro = QtWidgets.QLabel(
             "Say a keyword at the start of your dictation and it transforms the "
-            "rest.\nExample — a command “work email” with prompt “rewrite as a "
-            "professional email” turns\nyour casual speech into an email before "
+            "rest. Example: a command \"work email\" with the prompt \"rewrite as "
+            "a professional email\" turns your casual speech into an email before "
             "pasting."
         )
+        intro.setWordWrap(True)
         intro.setStyleSheet("color:#888;")
         layout.addWidget(intro)
+
+        types = QtWidgets.QLabel(TYPE_HELP)
+        types.setWordWrap(True)
+        types.setTextFormat(QtCore.Qt.RichText)
+        types.setStyleSheet("color:#aaa; background:rgba(128,128,128,0.08); "
+                            "padding:10px; border-radius:6px;")
+        layout.addWidget(types)
 
         # área rolável com os comandos
         self.scroll = QtWidgets.QScrollArea()
@@ -103,8 +122,8 @@ class CommandsWindow(QtWidgets.QWidget):
         fl.addWidget(typ, 1, 2)
 
         prompt = QtWidgets.QPlainTextEdit(cmd.get("prompt", ""))
-        prompt.setPlaceholderText("prompt — how to transform the text "
-                                  "(only for Rewrite; ignored for Translate/Save)")
+        prompt.setPlaceholderText("prompt: how to transform the text "
+                                  "(only for Rewrite; ignored for Translate and Save)")
         prompt.setFixedHeight(56)
         fl.addWidget(QtWidgets.QLabel("Prompt:"), 2, 1)
         fl.addWidget(prompt, 2, 2)

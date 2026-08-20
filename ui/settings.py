@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Janela de configuração (BYOK) do mr-whisper — sem terminal.
+"""Janela de configuração (BYOK) do mr-whisper, sem terminal.
 
 Escolhe o provider de transcrição, cola e VALIDA a chave ao vivo, define o
 backend dos comandos de LLM e o arquivo de notas. Salva via core.config.
@@ -109,21 +109,20 @@ class SettingsWindow(QtWidgets.QWidget):
         cmds.setStyleSheet("font-size:16px; font-weight:600;")
         layout.addWidget(cmds)
         info = QtWidgets.QLabel(
-            'Say a command at the start of your dictation:\n'
-            '  • "auto translate {language} …"  — translate + localize\n'
-            '  • "auto context …"  — rewrite for tone (same language)\n'
-            '  • "auto adjust …"  — clean filler, fix punctuation\n'
-            '  • "new dump …"  — append to your notes file instead of pasting'
+            "Say a keyword at the start of your speech to transform it (translate, "
+            "rewrite, save a note). Edit or create your own in the tray menu, under "
+            "\"Voice commands\"."
         )
+        info.setWordWrap(True)
         info.setStyleSheet("color:#888;")
         layout.addWidget(info)
 
-        # backend LLM
+        # backend LLM (motor dos comandos de voz)
         lrow = QtWidgets.QHBoxLayout()
         lrow.addWidget(QtWidgets.QLabel("LLM backend:"))
         self.llm = QtWidgets.QComboBox()
-        self.llm.addItem("Groq  ·  llama-3.3-70b", "groq")
-        self.llm.addItem("OpenRouter  ·  Gemini Flash", "openrouter")
+        self.llm.addItem("Groq (gpt-oss-120b)", "groq")
+        self.llm.addItem("OpenRouter (Gemini Flash)", "openrouter")
         self.llm.currentIndexChanged.connect(self._save_llm)
         lrow.addWidget(self.llm, 1)
         layout.addLayout(lrow)
@@ -217,7 +216,7 @@ class SettingsWindow(QtWidgets.QWidget):
         if ok:
             config.set_values({meta["key"]: self.key_edit.text().strip(),
                                "MRWHISPER_STT_PROVIDER": prov})
-            self._set_status(True, "✓ valid — saved")
+            self._set_status(True, "✓ valid, saved")
         else:
             self._set_status(False, f"✗ {why}")
 
@@ -254,5 +253,5 @@ class SettingsWindow(QtWidgets.QWidget):
             self.paste_hint.setText("")
             self.paste_shortcut.setEnabled(True)
         else:
-            self.paste_hint.setText("Off — the text is copied; paste it yourself when ready.")
+            self.paste_hint.setText("Off, the text is copied; paste it yourself when ready.")
             self.paste_shortcut.setEnabled(False)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""mr-whisper — app de bandeja cross-platform (Linux/macOS/Windows).
+"""mr-whisper, app de bandeja cross-platform (Linux/macOS/Windows).
 
 Um único processo Qt: tray icon (Settings / Pause / Quit), a pill flutuante, e a
 janela de settings. O listener de teclado (hold-to-talk) roda numa thread e fala
@@ -34,12 +34,12 @@ def _friendly_error(exc: Exception) -> str:
     """Traduz erros técnicos de STT em mensagem curta e humana."""
     s = str(exc).lower()
     if "429" in s or "rate" in s or "limit" in s or "quota" in s:
-        return "Daily free limit reached — try later or add another provider in Settings"
+        return "Daily free limit reached. Try later, or add another provider in Settings"
     if "401" in s or "invalid" in s or "auth" in s or "key" in s:
-        return "Invalid API key — check it in Settings"
+        return "Invalid API key. Check it in Settings"
     if "timeout" in s or "network" in s or "connection" in s or "resolve" in s:
         return "No internet connection"
-    return "Transcription failed — check Settings"
+    return "Transcription failed. Check Settings"
 
 
 def wav_duration(path: str) -> float:
@@ -82,7 +82,7 @@ class Controller(QtCore.QObject):
 
     def compute_state(self) -> str:
         """O estado do tray derivado das flags ATUAIS. Lido pelo slot na UI no
-        momento de renderizar — nunca um valor pré-computado que possa chegar
+        momento de renderizar, nunca um valor pré-computado que possa chegar
         stale (era isso que travava o spinner)."""
         with self.lock:
             if self.paused:
@@ -168,7 +168,7 @@ class Controller(QtCore.QObject):
             if self._cancel:
                 return
             print(f"transcrito: {text!r}", flush=True)
-            # comando de voz? (translate/rewrite/dump — built-in ou customizado)
+            # comando de voz? (translate/rewrite/dump, built-in ou customizado)
             is_dump = translate.is_dump(text) if text else False
             if text and translate.parse(text):
                 self.sig_transcribing.emit()
@@ -177,7 +177,7 @@ class Controller(QtCore.QObject):
             if is_dump:
                 self.sig_notify.emit("mr-whisper", "Note saved 📝")
                 return
-            # checa cancelamento SOB LOCK, imediatamente antes de colar — evita
+            # checa cancelamento SOB LOCK, imediatamente antes de colar, evita
             # colar um texto depois de o usuário ter apertado ESC.
             with self.lock:
                 if self._cancel or not text:
@@ -193,7 +193,7 @@ class Controller(QtCore.QObject):
             if not pasted:
                 # auto-paste desligado, ou o compositor (Wayland) bloqueou a
                 # injeção de teclas → o texto está no clipboard.
-                self.sig_notify.emit("mr-whisper", f"Copied — press {shortcut.replace('+', '+').title()} to paste")
+                self.sig_notify.emit("mr-whisper", f"Copied. Press {shortcut.replace(chr(43), chr(43)).title()} to paste")
         finally:
             with self.lock:
                 self.transcribing = False
@@ -232,7 +232,7 @@ def _check_platform_setup(platform, tray) -> None:
     # na 1ª tentativa; se pynput falhar silencioso, o balão de erro do press()/mic
     # já orienta. (Não há como checar permissão sem tentar.)
     if warn:
-        tray.showMessage("mr-whisper — setup", warn,
+        tray.showMessage("mr-whisper setup", warn,
                          QtWidgets.QSystemTrayIcon.Warning, 10000)
 
 
@@ -250,7 +250,7 @@ def main() -> int:
     # ── tray ──────────────────────────────────────────────────────────────────
     tray = TrayIcon()
     tray.setToolTip("mr-whisper")
-    # o estado é SEMPRE recomputado do controller na UI thread — nunca um valor
+    # o estado é SEMPRE recomputado do controller na UI thread, nunca um valor
     # que possa ter chegado fora de ordem (fixa o spinner travado).
     controller.sig_tray_state.connect(lambda _: tray.set_state(controller.compute_state()))
     controller.sig_notify.connect(
@@ -262,7 +262,7 @@ def main() -> int:
     hint = menu.addAction("Hold Ctrl+Alt+Space to dictate")
     hint.setEnabled(False)
 
-    # histórico das últimas transcrições — clicar recopia pro clipboard
+    # histórico das últimas transcrições, clicar recopia pro clipboard
     hist_menu = menu.addMenu("Recent")
 
     def rebuild_history():

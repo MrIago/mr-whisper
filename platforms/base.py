@@ -2,16 +2,16 @@
 """Interface de plataforma do mr-whisper.
 
 Cada SO implementa estas 3 peças (platform/linux.py, macos.py, windows.py). O
-daemon fala só com esta interface — não sabe se está no X11, no CoreAudio ou no
+daemon fala só com esta interface, não sabe se está no X11, no CoreAudio ou no
 Windows. Preferimos DUPLICAR lógica entre os OSes a criar abstrações frágeis:
 orquestrar áudio+teclado+paste é específico demais por plataforma.
 
 Peças:
-- Recorder      — grava o microfone num .wav 16k mono; reporta nível (0..1) por
+- Recorder     , grava o microfone num .wav 16k mono; reporta nível (0..1) por
                   callback pro widget desenhar o waveform.
-- HotkeyListener — escuta o atalho hold-to-talk (Ctrl+Alt+Espaço) e o cancelar
+- HotkeyListener, escuta o atalho hold-to-talk (Ctrl+Alt+Espaço) e o cancelar
                   (ESC); dispara callbacks press/release/cancel.
-- TextDelivery  — entrega o texto final na janela focada (clipboard + paste).
+- TextDelivery , entrega o texto final na janela focada (clipboard + paste).
 
 `get_platform()` devolve a implementação do SO atual.
 """

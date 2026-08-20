@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Ícone de bandeja do mr-whisper.
 
-Reflete o estado com ícones ESTÁTICOS (um por estado) — sem animar via setIcon.
+Reflete o estado com ícones ESTÁTICOS (um por estado), sem animar via setIcon.
 Motivo: o AppIndicator do GNOME (StatusNotifierItem) faz throttle/cache de ícone
 e engasga com updates rápidos, ficando preso num frame. A animação viva fica na
 pill (janela Qt própria); o tray só troca entre ícones fixos, que o indicador
@@ -38,7 +38,7 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
             state = "idle"
         if state == self._state:
             return
-        # NB: só trocamos entre ícones fixos — nunca animar via setIcon (o
+        # NB: só trocamos entre ícones fixos, nunca animar via setIcon (o
         # AppIndicator do GNOME engasga e trava num frame). Anima na pill.
         self._state = state
         self.setIcon(self._icons[state])
