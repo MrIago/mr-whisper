@@ -1,168 +1,69 @@
 #!/usr/bin/env python3
-"""Editor de comandos de voz do mr-whisper.
+"""Tutorial dos comandos de voz do mr-whisper (só leitura).
 
-Uma linha por comando: liga/desliga, palavras-chave (vírgula separa sinônimos),
-tipo (rewrite/translate/dump) e o prompt livre. Você diz a palavra-chave no meio
-da fala e o comando processa o que vem depois. Salva em commands.json.
+Lista os comandos fixos com um exemplo de cada. Você diz o comando no começo da
+fala e ele transforma o resto antes de colar (menos "new dump", que salva nas
+suas notas).
 """
 from __future__ import annotations
 
 from PySide6 import QtCore, QtWidgets
 
-from core import commands
-
-TYPES = [
-    ("rewrite", "Rewrite (apply the prompt to what you said)"),
-    ("translate", "Translate (first word after the keyword is the target language)"),
-    ("dump", "Save note (append to your notes file instead of pasting)"),
+COMMANDS = [
+    ("auto translate {language}", "Translate and localize into that language.",
+     '"auto translate spanish, good morning everyone"  →  "buenos días a todos"'),
+    ("auto context", "Rewrite in the same language, matching the tone to what you "
+     "said before the command.",
+     '"replying to my boss, auto context, hey bump up my salary?"  →  a polite, '
+     'professional version'),
+    ("auto adjust", "Light cleanup: remove filler (uh, um, like), fix punctuation "
+     "and grammar, keep your words.",
+     '"auto adjust, so, uh, we need to ship this friday"  →  "We need to ship '
+     'this Friday."'),
+    ("new dump", "Save what you say as a note instead of pasting it. See them in "
+     "Notes (tray menu).",
+     '"new dump, remember to review the auth PR"  →  saved to your notes'),
 ]
-
-# explicação de cada tipo, mostrada no topo da janela
-TYPE_HELP = (
-    "<b>Rewrite</b>: runs your prompt on what you said. "
-    "Write the prompt yourself (\"rewrite as a formal email\", "
-    "\"summarize in 3 bullets\", \"fix grammar\").<br>"
-    "<b>Translate</b>: the first word you say after the keyword is the target "
-    "language, and the rest is translated into it.<br>"
-    "<b>Save note</b>: appends what you say to your notes file instead of "
-    "pasting it (great for quick reminders)."
-)
 
 
 class CommandsWindow(QtWidgets.QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("mr-whisper · Voice commands")
-        self.setMinimumSize(640, 460)
-        self._build()
-        self._reload()
-
-    def _build(self) -> None:
+        self.setMinimumWidth(560)
         layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(12)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(16)
 
-        intro = QtWidgets.QLabel(
-            "Say a keyword at the start of your dictation and it transforms the "
-            "rest. Example: a command \"work email\" with the prompt \"rewrite as "
-            "a professional email\" turns your casual speech into an email before "
-            "pasting."
-        )
-        intro.setWordWrap(True)
-        intro.setStyleSheet("color:#888;")
-        layout.addWidget(intro)
+        top = QtWidgets.QLabel(
+            "Say one of these at the <b>start</b> of your dictation. Everything "
+            "before the command is used as context and never pasted; everything "
+            "after it is transformed.")
+        top.setWordWrap(True)
+        top.setTextFormat(QtCore.Qt.RichText)
+        top.setStyleSheet("color:#aaa;")
+        layout.addWidget(top)
 
-        types = QtWidgets.QLabel(TYPE_HELP)
-        types.setWordWrap(True)
-        types.setTextFormat(QtCore.Qt.RichText)
-        types.setStyleSheet("color:#aaa; background:rgba(128,128,128,0.08); "
-                            "padding:10px; border-radius:6px;")
-        layout.addWidget(types)
+        for name, what, example in COMMANDS:
+            card = QtWidgets.QFrame()
+            card.setFrameShape(QtWidgets.QFrame.StyledPanel)
+            v = QtWidgets.QVBoxLayout(card)
+            v.setContentsMargins(14, 12, 14, 12)
+            v.setSpacing(4)
 
-        # área rolável com os comandos
-        self.scroll = QtWidgets.QScrollArea()
-        self.scroll.setWidgetResizable(True)
-        self.inner = QtWidgets.QWidget()
-        self.vbox = QtWidgets.QVBoxLayout(self.inner)
-        self.vbox.setSpacing(10)
-        self.vbox.addStretch(1)
-        self.scroll.setWidget(self.inner)
-        layout.addWidget(self.scroll, 1)
+            title = QtWidgets.QLabel(name)
+            title.setStyleSheet("font-size:15px; font-weight:700; color:#9acd32;")
+            v.addWidget(title)
 
-        # botões
-        row = QtWidgets.QHBoxLayout()
-        add = QtWidgets.QPushButton("+ Add command")
-        add.clicked.connect(self._add_blank)
-        row.addWidget(add)
-        reset = QtWidgets.QPushButton("Reset to defaults")
-        reset.clicked.connect(self._reset)
-        row.addWidget(reset)
-        row.addStretch(1)
-        save = QtWidgets.QPushButton("Save")
-        save.setDefault(True)
-        save.clicked.connect(self._save)
-        row.addWidget(save)
-        layout.addLayout(row)
+            desc = QtWidgets.QLabel(what)
+            desc.setWordWrap(True)
+            v.addWidget(desc)
 
-        self._rows: list[dict] = []
+            ex = QtWidgets.QLabel(example)
+            ex.setWordWrap(True)
+            ex.setStyleSheet("color:#888; font-style:italic;")
+            v.addWidget(ex)
 
-    # ── construção das linhas ──────────────────────────────────────────────────
-    def _reload(self) -> None:
-        for r in self._rows:
-            r["frame"].setParent(None)
-        self._rows.clear()
-        for cmd in commands.load():
-            self._add_row(cmd)
+            layout.addWidget(card)
 
-    def _add_blank(self) -> None:
-        self._add_row({"id": "", "type": "rewrite", "enabled": True,
-                       "keywords": [], "prompt": ""})
-
-    def _add_row(self, cmd: dict) -> None:
-        frame = QtWidgets.QFrame()
-        frame.setFrameShape(QtWidgets.QFrame.StyledPanel)
-        fl = QtWidgets.QGridLayout(frame)
-        fl.setContentsMargins(12, 10, 12, 10)
-
-        enabled = QtWidgets.QCheckBox("On")
-        enabled.setChecked(cmd.get("enabled", True))
-        fl.addWidget(enabled, 0, 0)
-
-        keywords = QtWidgets.QLineEdit(", ".join(cmd.get("keywords", [])))
-        keywords.setPlaceholderText("keywords (comma-separated synonyms)")
-        fl.addWidget(QtWidgets.QLabel("Keywords:"), 0, 1)
-        fl.addWidget(keywords, 0, 2)
-
-        typ = QtWidgets.QComboBox()
-        for tid, label in TYPES:
-            typ.addItem(label, tid)
-        typ.setCurrentIndex(max(0, [t[0] for t in TYPES].index(cmd.get("type", "rewrite"))
-                                if cmd.get("type", "rewrite") in [t[0] for t in TYPES] else 0))
-        fl.addWidget(QtWidgets.QLabel("Type:"), 1, 1)
-        fl.addWidget(typ, 1, 2)
-
-        prompt = QtWidgets.QPlainTextEdit(cmd.get("prompt", ""))
-        prompt.setPlaceholderText("prompt: how to transform the text "
-                                  "(only for Rewrite; ignored for Translate and Save)")
-        prompt.setFixedHeight(56)
-        fl.addWidget(QtWidgets.QLabel("Prompt:"), 2, 1)
-        fl.addWidget(prompt, 2, 2)
-
-        rm = QtWidgets.QPushButton("Remove")
-        rm.clicked.connect(lambda: self._remove(frame))
-        fl.addWidget(rm, 0, 3)
-
-        # prompt só faz sentido pra rewrite
-        def sync_prompt():
-            prompt.setEnabled(typ.currentData() == "rewrite")
-        typ.currentIndexChanged.connect(sync_prompt)
-        sync_prompt()
-
-        self.vbox.insertWidget(self.vbox.count() - 1, frame)
-        self._rows.append({"frame": frame, "id": cmd.get("id", ""),
-                           "enabled": enabled, "keywords": keywords,
-                           "type": typ, "prompt": prompt})
-
-    def _remove(self, frame) -> None:
-        self._rows = [r for r in self._rows if r["frame"] is not frame]
-        frame.setParent(None)
-
-    def _reset(self) -> None:
-        commands.save([dict(c) for c in commands.DEFAULTS])
-        self._reload()
-
-    def _save(self) -> None:
-        out = []
-        for i, r in enumerate(self._rows):
-            kws = [k.strip() for k in r["keywords"].text().split(",") if k.strip()]
-            if not kws:
-                continue  # sem keyword = comando inválido, ignora
-            out.append({
-                "id": r["id"] or f"custom{i}",
-                "type": r["type"].currentData(),
-                "enabled": r["enabled"].isChecked(),
-                "keywords": kws,
-                "prompt": r["prompt"].toPlainText().strip(),
-            })
-        commands.save(out)
-        self.close()
+        layout.addStretch(1)

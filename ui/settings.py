@@ -127,14 +127,6 @@ class SettingsWindow(QtWidgets.QWidget):
         lrow.addWidget(self.llm, 1)
         layout.addLayout(lrow)
 
-        # arquivo de dump
-        drow = QtWidgets.QHBoxLayout()
-        drow.addWidget(QtWidgets.QLabel("Notes file:"))
-        self.dump_edit = QtWidgets.QLineEdit()
-        self.dump_edit.editingFinished.connect(self._save_dump)
-        drow.addWidget(self.dump_edit, 1)
-        layout.addLayout(drow)
-
         # ── Pasting ──────────────────────────────────────────────────────────
         layout.addSpacing(8)
         paste_title = QtWidgets.QLabel("Pasting")
@@ -175,7 +167,6 @@ class SettingsWindow(QtWidgets.QWidget):
         self._on_provider_change()
         llm = config.get("MRWHISPER_TRANSLATE", "groq") or "groq"
         self.llm.setCurrentIndex(max(0, self.llm.findData(llm)))
-        self.dump_edit.setText(config.get("MRWHISPER_DUMP_FILE", "~/Documentos/Notas/dump.md"))
         self.lang.setCurrentIndex(max(0, self.lang.findData(config.get("MRWHISPER_LANG", "") or "")))
         # pasting
         self.auto_paste.setChecked((config.get("MRWHISPER_AUTO_PASTE", "1") or "1") != "0")
@@ -233,11 +224,6 @@ class SettingsWindow(QtWidgets.QWidget):
         if getattr(self, "_loading", False):
             return
         config.set_values({"MRWHISPER_LANG": self.lang.currentData()})
-
-    def _save_dump(self) -> None:
-        v = self.dump_edit.text().strip()
-        if v:
-            config.set_values({"MRWHISPER_DUMP_FILE": v})
 
     def _save_paste(self) -> None:
         if getattr(self, "_loading", False):

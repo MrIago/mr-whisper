@@ -25,6 +25,7 @@ from ui.pill import Pill
 from ui.settings import SettingsWindow
 from ui.tray import TrayIcon
 from ui.commands_window import CommandsWindow
+from ui.notes_window import NotesWindow
 
 HERE = Path(__file__).parent
 MIN_HOLD = 0.3
@@ -246,6 +247,7 @@ def main() -> int:
 
     settings_win = SettingsWindow()
     commands_win = CommandsWindow()
+    notes_win = NotesWindow()
 
     # ── tray ──────────────────────────────────────────────────────────────────
     tray = TrayIcon()
@@ -281,9 +283,13 @@ def main() -> int:
     controller.sig_history.connect(rebuild_history)
     rebuild_history()
 
-    # editor de comandos de voz (built-in + customizados)
+    # tutorial dos comandos de voz
     menu.addAction("Voice commands…").triggered.connect(
         lambda: (commands_win.show(), commands_win.raise_(), commands_win.activateWindow()))
+
+    # notas salvas pelo comando "new dump"
+    menu.addAction("Notes…").triggered.connect(
+        lambda: (notes_win.show(), notes_win.raise_(), notes_win.activateWindow()))
 
     menu.addSeparator()
     act_settings = menu.addAction("Settings…")
