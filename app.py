@@ -77,20 +77,22 @@ class Controller(QtCore.QObject):
         self.sig_transcribing.connect(pill.show_transcribing)
         self.sig_hide.connect(pill.hide_pill)
 
-    def _refresh_tray(self) -> None:
-        """Emite o estado do tray DERIVADO das flags atuais — nunca emissões
-        soltas. Elimina a race que travava o spinner (a ordem de chegada de
-        'transcribing'/'idle' entre threads não importa: o estado é o fato)."""
+    def compute_state(self) -> str:
+        """O estado do tray derivado das flags ATUAIS. Lido pelo slot na UI no
+        momento de renderizar — nunca um valor pré-computado que possa chegar
+        stale (era isso que travava o spinner)."""
         with self.lock:
             if self.paused:
-                state = "paused"
-            elif self.recording:
-                state = "recording"
-            elif self.transcribing:
-                state = "transcribing"
-            else:
-                state = "idle"
-        self.sig_tray_state.emit(state)
+                return "paused"
+            if self.recording:
+                return "recording"
+            if self.transcribing:
+                return "transcribing"
+            return "idle"
+
+    def _refresh_tray(self) -> None:
+        # dispara o recompute na UI thread (o valor é lido lá, sempre fresco).
+        self.sig_tray_state.emit("")
 
     # chamados pela thread do hotkey
     def press(self) -> None:
@@ -215,7 +217,9 @@ def main() -> int:
     # ── tray ──────────────────────────────────────────────────────────────────
     tray = TrayIcon()
     tray.setToolTip("mr-whisper")
-    controller.sig_tray_state.connect(tray.set_state)
+    # o estado é SEMPRE recomputado do controller na UI thread — nunca um valor
+    # que possa ter chegado fora de ordem (fixa o spinner travado).
+    controller.sig_tray_state.connect(lambda _: tray.set_state(controller.compute_state()))
     controller.sig_notify.connect(
         lambda title, msg: tray.showMessage(title, msg,
                                             QtWidgets.QSystemTrayIcon.Information, 4000))
@@ -230,7 +234,7 @@ def main() -> int:
     def toggle_pause(checked):
         controller.paused = checked
         act_pause.setText("Paused" if checked else "Pause")
-        tray.set_state("paused" if checked else "idle")
+        tray.set_state(controller.compute_state())
     act_pause.toggled.connect(toggle_pause)
 
     menu.addSeparator()

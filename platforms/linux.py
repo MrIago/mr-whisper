@@ -210,14 +210,23 @@ class LinuxDelivery:
     # ── paste Wayland ─────────────────────────────────────────────────────────
     def _paste_wayland(self, shortcut: str) -> bool:
         keys = shortcut.split("+")  # ex: ["ctrl","v"] ou ["ctrl","shift","v"]
-        # ydotool: injeta via uinput (precisa do daemon ydotoold rodando).
+        # ydotool: injeta via uinput. Precisa de acesso ao /dev/uinput (grupo
+        # input + udev rule) — ver run/setup-linux-wayland.sh.
         if _have("ydotool"):
-            # mapeia nomes → keycodes do Linux input (ydotool key usa codes)
             code = {"ctrl": 29, "shift": 42, "v": 47}
-            seq = [f"{code[k]}:1" for k in keys if k in code] + \
-                  [f"{code[k]}:0" for k in reversed(keys) if k in code]
-            r = subprocess.run(["ydotool", "key", *seq], check=False,
-                               capture_output=True)
+            press = [f"{code[k]}:1" for k in keys if k in code]
+            release = [f"{code[k]}:0" for k in reversed(keys) if k in code]
+            # aponta pro socket do ydotoold (serviço --user), se existir — sem o
+            # daemon o ydotool é errático. --key-delay dá tempo do compositor
+            # registrar o Ctrl+V.
+            env = dict(os.environ)
+            sock = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/run/user/%d" % os.getuid()),
+                                ".ydotool_socket")
+            if os.path.exists(sock):
+                env["YDOTOOL_SOCKET"] = sock
+            r = subprocess.run(["ydotool", "key", "--key-delay", "25",
+                                *press, *release],
+                               check=False, capture_output=True, env=env)
             if r.returncode == 0:
                 return True
         # wtype: precisa do protocolo virtual-keyboard (não no GNOME).
