@@ -19,11 +19,12 @@ from pathlib import Path
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from core import config, cloud, dump, translate
+from core import config, cloud, translate
 from platforms import base
 from ui.pill import Pill
 from ui.settings import SettingsWindow
 from ui.tray import TrayIcon
+from ui.commands_window import CommandsWindow
 
 HERE = Path(__file__).parent
 MIN_HOLD = 0.3
@@ -167,17 +168,15 @@ class Controller(QtCore.QObject):
             if self._cancel:
                 return
             print(f"transcrito: {text!r}", flush=True)
-            note = dump.parse(text) if text else None
-            if note is not None:
-                ok = dump.save(note)
-                self.sig_hide.emit()
-                self.sig_notify.emit("mr-whisper",
-                                     "Note saved 📝" if ok else "Could not write your notes file")
-                return
+            # comando de voz? (translate/rewrite/dump — built-in ou customizado)
+            is_dump = translate.is_dump(text) if text else False
             if text and translate.parse(text):
                 self.sig_transcribing.emit()
                 text = translate.maybe_transform(text)
             self.sig_hide.emit()
+            if is_dump:
+                self.sig_notify.emit("mr-whisper", "Note saved 📝")
+                return
             # checa cancelamento SOB LOCK, imediatamente antes de colar — evita
             # colar um texto depois de o usuário ter apertado ESC.
             with self.lock:
@@ -246,6 +245,7 @@ def main() -> int:
     controller = Controller(platform, pill)
 
     settings_win = SettingsWindow()
+    commands_win = CommandsWindow()
 
     # ── tray ──────────────────────────────────────────────────────────────────
     tray = TrayIcon()
@@ -281,13 +281,9 @@ def main() -> int:
     controller.sig_history.connect(rebuild_history)
     rebuild_history()
 
-    # descoberta dos comandos de voz
-    def show_commands():
-        tray.showMessage(
-            "Voice commands (say at the start)",
-            'auto translate {lang} · auto context · auto adjust · new dump',
-            QtWidgets.QSystemTrayIcon.Information, 8000)
-    menu.addAction("Voice commands…").triggered.connect(show_commands)
+    # editor de comandos de voz (built-in + customizados)
+    menu.addAction("Voice commands…").triggered.connect(
+        lambda: (commands_win.show(), commands_win.raise_(), commands_win.activateWindow()))
 
     menu.addSeparator()
     act_settings = menu.addAction("Settings…")
