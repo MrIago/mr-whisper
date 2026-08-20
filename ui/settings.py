@@ -86,6 +86,24 @@ class SettingsWindow(QtWidgets.QWidget):
         self.status = QtWidgets.QLabel("")
         layout.addWidget(self.status)
 
+        # idioma da transcrição (trava se você fala sempre o mesmo)
+        lgrow = QtWidgets.QHBoxLayout()
+        lgrow.addWidget(QtWidgets.QLabel("Language:"))
+        self.lang = QtWidgets.QComboBox()
+        self.lang.addItem("Auto-detect", "")
+        for code, name in (("pt", "Portuguese"), ("en", "English"), ("es", "Spanish"),
+                           ("fr", "French"), ("de", "German"), ("it", "Italian"),
+                           ("ja", "Japanese"), ("zh", "Chinese")):
+            self.lang.addItem(name, code)
+        self.lang.currentIndexChanged.connect(self._save_lang)
+        lgrow.addWidget(self.lang, 1)
+        layout.addLayout(lgrow)
+        lang_hint = QtWidgets.QLabel("Lock it if you always dictate one language "
+                                     "(Auto sometimes guesses wrong on short clips).")
+        lang_hint.setStyleSheet("color:#888;")
+        lang_hint.setWordWrap(True)
+        layout.addWidget(lang_hint)
+
         layout.addSpacing(8)
         cmds = QtWidgets.QLabel("Voice commands")
         cmds.setStyleSheet("font-size:16px; font-weight:600;")
@@ -151,6 +169,7 @@ class SettingsWindow(QtWidgets.QWidget):
         return self.provider.currentData()
 
     def _load(self) -> None:
+        self._loading = True
         prov = config.get("MRWHISPER_STT_PROVIDER", "groq") or "groq"
         idx = max(0, self.provider.findData(prov))
         self.provider.setCurrentIndex(idx)
@@ -158,8 +177,8 @@ class SettingsWindow(QtWidgets.QWidget):
         llm = config.get("MRWHISPER_TRANSLATE", "groq") or "groq"
         self.llm.setCurrentIndex(max(0, self.llm.findData(llm)))
         self.dump_edit.setText(config.get("MRWHISPER_DUMP_FILE", "~/Documentos/Notas/dump.md"))
+        self.lang.setCurrentIndex(max(0, self.lang.findData(config.get("MRWHISPER_LANG", "") or "")))
         # pasting
-        self._loading = True
         self.auto_paste.setChecked((config.get("MRWHISPER_AUTO_PASTE", "1") or "1") != "0")
         sc = config.get("MRWHISPER_PASTE_SHORTCUT", "ctrl+v") or "ctrl+v"
         self.paste_shortcut.setCurrentIndex(max(0, self.paste_shortcut.findData(sc)))
@@ -207,7 +226,14 @@ class SettingsWindow(QtWidgets.QWidget):
         self.status.setStyleSheet("color:#4a9;" if ok else "color:#d66;")
 
     def _save_llm(self) -> None:
+        if getattr(self, "_loading", False):
+            return
         config.set_values({"MRWHISPER_TRANSLATE": self.llm.currentData()})
+
+    def _save_lang(self) -> None:
+        if getattr(self, "_loading", False):
+            return
+        config.set_values({"MRWHISPER_LANG": self.lang.currentData()})
 
     def _save_dump(self) -> None:
         v = self.dump_edit.text().strip()

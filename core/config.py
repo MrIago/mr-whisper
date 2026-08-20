@@ -14,6 +14,7 @@ Chaves/prefs conhecidas:
 - OPENAI_API_KEY        — transcrição e/ou tradução via OpenAI
 - OPENROUTER_KEY        — transcrição e/ou tradução via OpenRouter
 - MRWHISPER_STT_PROVIDER — provider de transcrição: "groq" | "openai" | "openrouter"
+- MRWHISPER_LANG        — trava o idioma da transcrição (ex: "pt", "en"); vazio = auto
 - MRWHISPER_TRANSLATE   — backend dos comandos LLM: "groq" | "openrouter"
 - MRWHISPER_DUMP_FILE   — arquivo de notas do comando "new dump" (default:
                           ~/Documentos/Notas/dump.md)

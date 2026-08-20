@@ -115,6 +115,11 @@ def _stt_whisper_endpoint(endpoint: str, key: str, model: str, wav_path: str,
     with open(wav_path, "rb") as f:
         files = {"file": (name, f, "audio/wav")}
         data = {"model": model, "response_format": "json", "temperature": "0"}
+        # trava o idioma se configurado (MRWHISPER_LANG=pt|en|…) — evita o
+        # whisper "adivinhar" errado (ex: PT curto virar russo). Vazio = auto.
+        lang = get("MRWHISPER_LANG")
+        if lang:
+            data["language"] = lang
         r = requests.post(
             endpoint, headers={"Authorization": f"Bearer {key}"},
             files=files, data=data, timeout=120,
