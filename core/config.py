@@ -17,6 +17,9 @@ Chaves/prefs conhecidas:
 - MRWHISPER_TRANSLATE   — backend dos comandos LLM: "groq" | "openrouter"
 - MRWHISPER_DUMP_FILE   — arquivo de notas do comando "new dump" (default:
                           ~/Documentos/Notas/dump.md)
+- MRWHISPER_PASTE_SHORTCUT — atalho de colar: "ctrl+v" (default) | "ctrl+shift+v"
+- MRWHISPER_AUTO_PASTE   — colar automático após transcrever: "1" (default) | "0"
+                          (se "0", só copia pro clipboard — você cola manualmente)
 """
 from __future__ import annotations
 

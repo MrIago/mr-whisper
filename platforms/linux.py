@@ -157,45 +157,18 @@ class EvdevHotkey:
 
 
 # ── paste (xclip + xdotool) ───────────────────────────────────────────────────
-TERMINAL_CLASSES = (
-    "terminal", "gnome-terminal", "konsole", "xterm", "rxvt", "urxvt",
-    "alacritty", "kitty", "wezterm", "st-256color", "tilix", "terminator",
-    "foot", "xfce4-terminal", "guake", "yakuake", "ptyxis",
-)
-
-
-def _window_is_terminal(wid: str) -> bool:
-    if not wid:
-        return False
-    try:
-        out = subprocess.run(
-            ["xprop", "-id", wid, "WM_CLASS"], capture_output=True, text=True, timeout=1
-        ).stdout.lower()
-    except (subprocess.SubprocessError, OSError):
-        return False
-    cls = out.split("=", 1)[1] if "=" in out else ""
-    return any(t in cls for t in TERMINAL_CLASSES)
-
-
 class X11Delivery:
-    def deliver(self, text: str) -> None:
-        # janela alvo (só pra decidir o atalho; não reativa a janela).
-        try:
-            wid = subprocess.run(
-                ["xdotool", "getactivewindow"], capture_output=True, text=True, timeout=1
-            ).stdout.strip()
-        except (subprocess.SubprocessError, OSError):
-            wid = ""
-        _ = _window_is_terminal(wid)  # (mantido: Ctrl+Shift+V já é universal)
-
+    def deliver(self, text: str, paste: bool = True, shortcut: str = "ctrl+v") -> None:
+        """Copia `text` pro clipboard. Se `paste`, cola com `shortcut` na janela
+        ativa. `paste=False` → só copia (o usuário cola manualmente)."""
         self._set_clipboard(text)
+        if not paste:
+            return
         time.sleep(0.18)  # deixa a extensão de clipboard selecionar nosso texto
-
         # solta modificadores presos (Ctrl+Alt+Espaço dessincroniza o X)
         subprocess.run(["xdotool", "keyup", "ctrl", "alt", "shift", "super"], check=False)
         time.sleep(0.05)
-        combo = os.environ.get("VOICEFLOW_PASTE", "ctrl+shift+v")
-        subprocess.run(["xdotool", "key", "--clearmodifiers", combo], check=False)
+        subprocess.run(["xdotool", "key", "--clearmodifiers", shortcut], check=False)
 
     @staticmethod
     def _set_clipboard(text: str) -> None:

@@ -42,9 +42,9 @@ class Pill(QtWidgets.QWidget):
     def show_listening(self) -> None:
         self.mode = "listening"
         self.level = 0.0
-        self._position()
         self.show()
-        self.raise_()
+        self._position()   # depois do show(): mover antes do mapeamento é
+        self.raise_()      # ignorado por vários WMs (janela ia parar em 0,0)
         self._timer.start()
 
     def set_level(self, lvl: float) -> None:

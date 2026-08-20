@@ -145,14 +145,31 @@ class ClipboardDelivery:
     def __init__(self, paste_modifier: str) -> None:
         self.paste_modifier = paste_modifier  # "cmd" | "ctrl"
 
-    def deliver(self, text: str) -> None:
+    def deliver(self, text: str, paste: bool = True, shortcut: str = "") -> None:
+        """Copia `text`. Se `paste`, cola com o atalho do SO. `shortcut` (ex:
+        "ctrl+shift+v") permite forçar Shift; senão usa o modificador padrão do
+        SO (Cmd no macOS, Ctrl no Windows). `paste=False` → só copia."""
         import pyperclip
         from pynput import keyboard as kb
 
         pyperclip.copy(text)
+        if not paste:
+            return
         time.sleep(0.12)
         ctrl = kb.Controller()
         mod = kb.Key.cmd if self.paste_modifier == "cmd" else kb.Key.ctrl
-        with ctrl.pressed(mod):
+        use_shift = "shift" in (shortcut or "").lower()
+        mods = [mod] + ([kb.Key.shift] if use_shift else [])
+        # try/finally: se algo falhar no meio, os modificadores NUNCA ficam
+        # grudados no SO (Cmd/Ctrl preso trava o teclado do usuário).
+        try:
+            for m in mods:
+                ctrl.press(m)
             ctrl.press("v")
             ctrl.release("v")
+        finally:
+            for m in reversed(mods):
+                try:
+                    ctrl.release(m)
+                except Exception:
+                    pass

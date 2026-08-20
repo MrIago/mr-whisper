@@ -23,9 +23,22 @@ from core import config, cloud, dump, translate
 from platforms import base
 from ui.pill import Pill
 from ui.settings import SettingsWindow
+from ui.tray import TrayIcon
 
 HERE = Path(__file__).parent
 MIN_HOLD = 0.3
+
+
+def _friendly_error(exc: Exception) -> str:
+    """Traduz erros técnicos de STT em mensagem curta e humana."""
+    s = str(exc).lower()
+    if "429" in s or "rate" in s or "limit" in s or "quota" in s:
+        return "Daily free limit reached — try later or add another provider in Settings"
+    if "401" in s or "invalid" in s or "auth" in s or "key" in s:
+        return "Invalid API key — check it in Settings"
+    if "timeout" in s or "network" in s or "connection" in s or "resolve" in s:
+        return "No internet connection"
+    return "Transcription failed — check Settings"
 
 
 def wav_duration(path: str) -> float:
@@ -44,6 +57,8 @@ class Controller(QtCore.QObject):
     sig_level = QtCore.Signal(float)
     sig_transcribing = QtCore.Signal()
     sig_hide = QtCore.Signal()
+    sig_tray_state = QtCore.Signal(str)   # idle | recording | transcribing
+    sig_notify = QtCore.Signal(str, str)  # (title, message) → balão do tray
 
     def __init__(self, platform: base.Platform, pill: Pill) -> None:
         super().__init__()
@@ -68,24 +83,45 @@ class Controller(QtCore.QObject):
             if self.paused or self.recording or self.transcribing:
                 return
             self.recording = True
+        # start() fora do lock (pode falhar/bloquear). Try/except evita o
+        # estado-morto: se o mic falha, reseta recording e avisa.
+        try:
             self.recorder.start()
-            self.sig_listening.emit()
+        except Exception as exc:
+            with self.lock:
+                self.recording = False
+            self.sig_hide.emit()
+            self.sig_tray_state.emit("idle")
+            self.sig_notify.emit("mr-whisper", f"Microphone error: {exc}")
+            return
+        self.sig_listening.emit()
+        self.sig_tray_state.emit("recording")
 
     def release(self) -> None:
         with self.lock:
             if not self.recording:
                 return
             self.recording = False
-            held = time.time() - self.recorder.started_at
+            started_at = self.recorder.started_at
+        # stop() FORA do lock: proc.wait(timeout=5) bloquearia o teclado global.
+        held = time.time() - started_at
+        try:
             wav = self.recorder.stop()
-            if held < MIN_HOLD or not wav:
-                self.sig_hide.emit()
-                self._rm(wav)
-                return
+        except Exception as exc:
+            self.sig_hide.emit()
+            self.sig_tray_state.emit("idle")
+            self.sig_notify.emit("mr-whisper", f"Recording error: {exc}")
+            return
+        if held < MIN_HOLD or not wav:
+            self.sig_hide.emit()
+            self.sig_tray_state.emit("idle")
+            self._rm(wav)
+            return
+        with self.lock:
             self.transcribing = True
             self._cancel = False
-            self.sig_transcribing.emit()
-            threading.Thread(target=self._process, args=(wav,), daemon=True).start()
+        self.sig_transcribing.emit()
+        threading.Thread(target=self._process, args=(wav,), daemon=True).start()
 
     def cancel(self) -> None:
         with self.lock:
@@ -93,9 +129,11 @@ class Controller(QtCore.QObject):
                 return
             self._cancel = True
             self.transcribing = False
-            self.sig_hide.emit()
+        self.sig_hide.emit()
+        self.sig_tray_state.emit("idle")
 
     def _process(self, wav: str) -> None:
+        self.sig_tray_state.emit("transcribing")
         try:
             if wav_duration(wav) < 0.25:
                 self.sig_hide.emit()
@@ -103,26 +141,39 @@ class Controller(QtCore.QObject):
             try:
                 text = cloud.transcribe_cloud(wav)
             except Exception as exc:
-                print(f"STT falhou: {exc}", flush=True)
                 self.sig_hide.emit()
+                self.sig_notify.emit("mr-whisper", _friendly_error(exc))
+                print(f"STT falhou: {exc}", flush=True)
                 return
             if self._cancel:
                 return
             print(f"transcrito: {text!r}", flush=True)
             note = dump.parse(text) if text else None
             if note is not None:
-                dump.save(note)
+                ok = dump.save(note)
                 self.sig_hide.emit()
+                self.sig_notify.emit("mr-whisper",
+                                     "Note saved 📝" if ok else "Could not write your notes file")
                 return
             if text and translate.parse(text):
                 self.sig_transcribing.emit()
                 text = translate.maybe_transform(text)
             self.sig_hide.emit()
-            if text and not self._cancel:
-                self.delivery.deliver(text)
+            # checa cancelamento SOB LOCK, imediatamente antes de colar — evita
+            # colar um texto depois de o usuário ter apertado ESC.
+            with self.lock:
+                if self._cancel or not text:
+                    return
+            auto = (config.get("MRWHISPER_AUTO_PASTE", "1") or "1") != "0"
+            shortcut = config.get("MRWHISPER_PASTE_SHORTCUT", "ctrl+v") or "ctrl+v"
+            self.delivery.deliver(text, paste=auto, shortcut=shortcut)
+            print(f"entregue ({len(text)} chars, paste={auto}, {shortcut})", flush=True)
+            if not auto:
+                self.sig_notify.emit("mr-whisper", "Copied to clipboard — paste it where you want")
         finally:
             with self.lock:
                 self.transcribing = False
+            self.sig_tray_state.emit("idle")
             self._rm(wav)
 
     @staticmethod
@@ -132,23 +183,6 @@ class Controller(QtCore.QObject):
                 os.unlink(path)
             except OSError:
                 pass
-
-
-def _tray_icon() -> QtGui.QIcon:
-    """Ícone simples desenhado em runtime (mic verde) — sem asset externo."""
-    pix = QtGui.QPixmap(64, 64)
-    pix.fill(QtCore.Qt.transparent)
-    p = QtGui.QPainter(pix)
-    p.setRenderHint(QtGui.QPainter.Antialiasing)
-    p.setBrush(QtGui.QColor("#9acd32"))
-    p.setPen(QtCore.Qt.NoPen)
-    p.drawRoundedRect(24, 10, 16, 28, 8, 8)          # corpo do mic
-    p.setPen(QtGui.QPen(QtGui.QColor("#9acd32"), 4))
-    p.setBrush(QtCore.Qt.NoBrush)
-    p.drawArc(18, 20, 28, 28, 180 * 16, 180 * 16)     # arco
-    p.drawLine(32, 48, 32, 56)                         # haste
-    p.end()
-    return QtGui.QIcon(pix)
 
 
 def main() -> int:
@@ -162,8 +196,12 @@ def main() -> int:
     settings_win = SettingsWindow()
 
     # ── tray ──────────────────────────────────────────────────────────────────
-    tray = QtWidgets.QSystemTrayIcon(_tray_icon())
+    tray = TrayIcon()
     tray.setToolTip("mr-whisper")
+    controller.sig_tray_state.connect(tray.set_state)
+    controller.sig_notify.connect(
+        lambda title, msg: tray.showMessage(title, msg,
+                                            QtWidgets.QSystemTrayIcon.Information, 4000))
     menu = QtWidgets.QMenu()
 
     act_settings = menu.addAction("Settings…")
@@ -175,6 +213,7 @@ def main() -> int:
     def toggle_pause(checked):
         controller.paused = checked
         act_pause.setText("Paused" if checked else "Pause")
+        tray.set_state("paused" if checked else "idle")
     act_pause.toggled.connect(toggle_pause)
 
     menu.addSeparator()

@@ -118,6 +118,29 @@ class SettingsWindow(QtWidgets.QWidget):
         drow.addWidget(self.dump_edit, 1)
         layout.addLayout(drow)
 
+        # ── Pasting ──────────────────────────────────────────────────────────
+        layout.addSpacing(8)
+        paste_title = QtWidgets.QLabel("Pasting")
+        paste_title.setStyleSheet("font-size:16px; font-weight:600;")
+        layout.addWidget(paste_title)
+
+        self.auto_paste = QtWidgets.QCheckBox("Paste automatically after transcribing")
+        self.auto_paste.toggled.connect(self._save_paste)
+        layout.addWidget(self.auto_paste)
+
+        self.paste_hint = QtWidgets.QLabel("")
+        self.paste_hint.setStyleSheet("color:#888;")
+        layout.addWidget(self.paste_hint)
+
+        srow = QtWidgets.QHBoxLayout()
+        srow.addWidget(QtWidgets.QLabel("Paste shortcut:"))
+        self.paste_shortcut = QtWidgets.QComboBox()
+        self.paste_shortcut.addItem("Ctrl+V  (most apps & terminals)", "ctrl+v")
+        self.paste_shortcut.addItem("Ctrl+Shift+V  (old terminals)", "ctrl+shift+v")
+        self.paste_shortcut.currentIndexChanged.connect(self._save_paste)
+        srow.addWidget(self.paste_shortcut, 1)
+        layout.addLayout(srow)
+
         layout.addSpacing(8)
         hint = QtWidgets.QLabel("Hold  Ctrl + Alt + Space  to dictate. Esc cancels.")
         hint.setStyleSheet("color:#888;")
@@ -135,6 +158,13 @@ class SettingsWindow(QtWidgets.QWidget):
         llm = config.get("MRWHISPER_TRANSLATE", "groq") or "groq"
         self.llm.setCurrentIndex(max(0, self.llm.findData(llm)))
         self.dump_edit.setText(config.get("MRWHISPER_DUMP_FILE", "~/Documentos/Notas/dump.md"))
+        # pasting
+        self._loading = True
+        self.auto_paste.setChecked((config.get("MRWHISPER_AUTO_PASTE", "1") or "1") != "0")
+        sc = config.get("MRWHISPER_PASTE_SHORTCUT", "ctrl+v") or "ctrl+v"
+        self.paste_shortcut.setCurrentIndex(max(0, self.paste_shortcut.findData(sc)))
+        self._loading = False
+        self._update_paste_hint()
 
     def _on_provider_change(self) -> None:
         meta = PROVIDERS[self._current_provider()]
@@ -183,3 +213,20 @@ class SettingsWindow(QtWidgets.QWidget):
         v = self.dump_edit.text().strip()
         if v:
             config.set_values({"MRWHISPER_DUMP_FILE": v})
+
+    def _save_paste(self) -> None:
+        if getattr(self, "_loading", False):
+            return
+        config.set_values({
+            "MRWHISPER_AUTO_PASTE": "1" if self.auto_paste.isChecked() else "0",
+            "MRWHISPER_PASTE_SHORTCUT": self.paste_shortcut.currentData(),
+        })
+        self._update_paste_hint()
+
+    def _update_paste_hint(self) -> None:
+        if self.auto_paste.isChecked():
+            self.paste_hint.setText("")
+            self.paste_shortcut.setEnabled(True)
+        else:
+            self.paste_hint.setText("Off — the text is copied; paste it yourself when ready.")
+            self.paste_shortcut.setEnabled(False)
