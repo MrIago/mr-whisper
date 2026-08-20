@@ -59,6 +59,7 @@ class Controller(QtCore.QObject):
     sig_hide = QtCore.Signal()
     sig_tray_state = QtCore.Signal(str)   # idle | recording | transcribing
     sig_notify = QtCore.Signal(str, str)  # (title, message) → balão do tray
+    sig_history = QtCore.Signal()         # nova transcrição entrou no histórico
 
     def __init__(self, platform: base.Platform, pill: Pill) -> None:
         super().__init__()
@@ -71,6 +72,7 @@ class Controller(QtCore.QObject):
         self.paused = False
         self._cancel = False
         self.lock = threading.Lock()
+        self.history: list[str] = []  # últimas transcrições (mais recente no fim)
 
         self.sig_listening.connect(pill.show_listening)
         self.sig_level.connect(pill.set_level)
@@ -185,6 +187,10 @@ class Controller(QtCore.QObject):
             shortcut = config.get("MRWHISPER_PASTE_SHORTCUT", "ctrl+v") or "ctrl+v"
             pasted = self.delivery.deliver(text, paste=auto, shortcut=shortcut)
             print(f"entregue ({len(text)} chars, paste={auto}→{pasted}, {shortcut})", flush=True)
+            with self.lock:
+                self.history.append(text)
+                self.history[:] = self.history[-10:]  # guarda as últimas 10
+            self.sig_history.emit()
             if not pasted:
                 # auto-paste desligado, ou o compositor (Wayland) bloqueou a
                 # injeção de teclas → o texto está no clipboard.
@@ -202,6 +208,33 @@ class Controller(QtCore.QObject):
                 os.unlink(path)
             except OSError:
                 pass
+
+
+def _check_platform_setup(platform, tray) -> None:
+    """No 1º uso, detecta e avisa pré-requisitos de plataforma que, se faltando,
+    fazem o app parecer 'quebrado' (nada acontece ao ditar)."""
+    warn = None
+    if platform.name == "linux":
+        # sem acesso a teclado (grupo input) → hold-to-talk não dispara
+        try:
+            from platforms import linux as _lx
+            if not _lx._find_keyboards():
+                warn = ("Keyboard access needed: add yourself to the 'input' group "
+                        "(sudo usermod -aG input $USER) and log out/in.")
+            elif _lx._is_wayland():
+                import os
+                sock = os.path.join(os.environ.get("XDG_RUNTIME_DIR", ""), ".ydotool_socket")
+                if not _lx._have("ydotool") or not os.path.exists(sock):
+                    warn = ("On Wayland, auto-paste needs a one-time setup: run "
+                            "run/setup-linux-wayland.sh. Until then it copies to the clipboard.")
+        except Exception:
+            pass
+    # macOS: as permissões (Accessibility/Input Monitoring/Mic) o SO pede sozinho
+    # na 1ª tentativa; se pynput falhar silencioso, o balão de erro do press()/mic
+    # já orienta. (Não há como checar permissão sem tentar.)
+    if warn:
+        tray.showMessage("mr-whisper — setup", warn,
+                         QtWidgets.QSystemTrayIcon.Warning, 10000)
 
 
 def main() -> int:
@@ -225,6 +258,38 @@ def main() -> int:
                                             QtWidgets.QSystemTrayIcon.Information, 4000))
     menu = QtWidgets.QMenu()
 
+    # dica de uso (hold-to-talk) sempre visível no topo
+    hint = menu.addAction("Hold Ctrl+Alt+Space to dictate")
+    hint.setEnabled(False)
+
+    # histórico das últimas transcrições — clicar recopia pro clipboard
+    hist_menu = menu.addMenu("Recent")
+
+    def rebuild_history():
+        hist_menu.clear()
+        items = list(reversed(controller.history))
+        if not items:
+            a = hist_menu.addAction("(nothing yet)")
+            a.setEnabled(False)
+            return
+        for txt in items:
+            label = (txt[:50] + "…") if len(txt) > 50 else txt
+            act = hist_menu.addAction(label.replace("\n", " "))
+            # clicar recopia pro clipboard (paste=False só copia, nos 3 OS)
+            act.triggered.connect(
+                lambda _=False, t=txt: controller.delivery.deliver(t, paste=False))
+    controller.sig_history.connect(rebuild_history)
+    rebuild_history()
+
+    # descoberta dos comandos de voz
+    def show_commands():
+        tray.showMessage(
+            "Voice commands (say at the start)",
+            'auto translate {lang} · auto context · auto adjust · new dump',
+            QtWidgets.QSystemTrayIcon.Information, 8000)
+    menu.addAction("Voice commands…").triggered.connect(show_commands)
+
+    menu.addSeparator()
     act_settings = menu.addAction("Settings…")
     act_settings.triggered.connect(lambda: (settings_win.show(), settings_win.raise_(),
                                             settings_win.activateWindow()))
@@ -253,6 +318,9 @@ def main() -> int:
     # ── hotkey em thread ──────────────────────────────────────────────────────
     hotkey = platform.make_hotkey(controller.press, controller.release, controller.cancel)
     threading.Thread(target=hotkey.run, daemon=True).start()
+
+    # aviso de setup por plataforma (permissões / Wayland) no 1º uso
+    _check_platform_setup(platform, tray)
 
     return app.exec()
 
