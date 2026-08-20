@@ -45,17 +45,26 @@ even for long text).
 
 | OS | Download | Run |
 |---|---|---|
-| macOS | `mr-whisper-macos.dmg` | open the `.dmg`, drag to Applications, launch |
+| macOS (Apple Silicon) | `mr-whisper-macos-arm64.dmg` | open the `.dmg`, drag to Applications, launch |
+| macOS (Intel) | `mr-whisper-macos-intel.dmg` | same — pick this one on an Intel Mac |
 | Windows | `mr-whisper-windows.zip` | unzip, run `mr-whisper.exe` |
 | Linux | `mr-whisper-linux.tar.gz` | extract, run `./mr-whisper` |
 
-A 🎙️ icon appears in your tray. First launch opens **Settings** — pick a
-provider and paste your key (get a free Groq one right from that screen). Then
-just hold `Ctrl+Alt+Space`, speak, release.
+A 🎙️ icon appears in your tray (menu: Recent · Voice commands · Settings ·
+Pause · Quit). First launch opens **Settings** — pick a provider and paste your
+key (get a free Groq one right from that screen). Then just hold
+`Ctrl+Alt+Space`, speak, release.
 
 **Permissions (once):**
-- **macOS** → Accessibility, Input Monitoring, Microphone (System Settings → Privacy & Security).
-- **Linux** → be in the `input` group (`sudo usermod -aG input $USER`, then re-login) and have `xclip`/`xdotool` installed.
+- **macOS** → the first time you dictate, the OS asks for **Accessibility**,
+  **Input Monitoring** and **Microphone** (System Settings → Privacy & Security).
+  Grant them and relaunch. (Unsigned app → open it the first time with
+  right-click → Open.)
+- **Linux (X11)** → be in the `input` group (`sudo usermod -aG input $USER`, then
+  re-login); `sudo apt install xclip xdotool`.
+- **Linux (Wayland)** → auto-paste needs a one-time setup (Wayland blocks
+  synthetic keys by default): `bash run/setup-linux-wayland.sh`. Without it the
+  text is still copied to the clipboard, you just press Ctrl+V yourself.
 
 ## Run from source (developers)
 
