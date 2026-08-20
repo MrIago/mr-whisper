@@ -77,6 +77,21 @@ class Controller(QtCore.QObject):
         self.sig_transcribing.connect(pill.show_transcribing)
         self.sig_hide.connect(pill.hide_pill)
 
+    def _refresh_tray(self) -> None:
+        """Emite o estado do tray DERIVADO das flags atuais — nunca emissões
+        soltas. Elimina a race que travava o spinner (a ordem de chegada de
+        'transcribing'/'idle' entre threads não importa: o estado é o fato)."""
+        with self.lock:
+            if self.paused:
+                state = "paused"
+            elif self.recording:
+                state = "recording"
+            elif self.transcribing:
+                state = "transcribing"
+            else:
+                state = "idle"
+        self.sig_tray_state.emit(state)
+
     # chamados pela thread do hotkey
     def press(self) -> None:
         with self.lock:
@@ -91,11 +106,11 @@ class Controller(QtCore.QObject):
             with self.lock:
                 self.recording = False
             self.sig_hide.emit()
-            self.sig_tray_state.emit("idle")
+            self._refresh_tray()
             self.sig_notify.emit("mr-whisper", f"Microphone error: {exc}")
             return
         self.sig_listening.emit()
-        self.sig_tray_state.emit("recording")
+        self._refresh_tray()
 
     def release(self) -> None:
         with self.lock:
@@ -109,12 +124,12 @@ class Controller(QtCore.QObject):
             wav = self.recorder.stop()
         except Exception as exc:
             self.sig_hide.emit()
-            self.sig_tray_state.emit("idle")
+            self._refresh_tray()
             self.sig_notify.emit("mr-whisper", f"Recording error: {exc}")
             return
         if held < MIN_HOLD or not wav:
             self.sig_hide.emit()
-            self.sig_tray_state.emit("idle")
+            self._refresh_tray()
             self._rm(wav)
             return
         with self.lock:
@@ -130,10 +145,10 @@ class Controller(QtCore.QObject):
             self._cancel = True
             self.transcribing = False
         self.sig_hide.emit()
-        self.sig_tray_state.emit("idle")
+        self._refresh_tray()
 
     def _process(self, wav: str) -> None:
-        self.sig_tray_state.emit("transcribing")
+        self._refresh_tray()
         try:
             if wav_duration(wav) < 0.25:
                 self.sig_hide.emit()
@@ -166,14 +181,16 @@ class Controller(QtCore.QObject):
                     return
             auto = (config.get("MRWHISPER_AUTO_PASTE", "1") or "1") != "0"
             shortcut = config.get("MRWHISPER_PASTE_SHORTCUT", "ctrl+v") or "ctrl+v"
-            self.delivery.deliver(text, paste=auto, shortcut=shortcut)
-            print(f"entregue ({len(text)} chars, paste={auto}, {shortcut})", flush=True)
-            if not auto:
-                self.sig_notify.emit("mr-whisper", "Copied to clipboard — paste it where you want")
+            pasted = self.delivery.deliver(text, paste=auto, shortcut=shortcut)
+            print(f"entregue ({len(text)} chars, paste={auto}→{pasted}, {shortcut})", flush=True)
+            if not pasted:
+                # auto-paste desligado, ou o compositor (Wayland) bloqueou a
+                # injeção de teclas → o texto está no clipboard.
+                self.sig_notify.emit("mr-whisper", f"Copied — press {shortcut.replace('+', '+').title()} to paste")
         finally:
             with self.lock:
                 self.transcribing = False
-            self.sig_tray_state.emit("idle")
+            self._refresh_tray()
             self._rm(wav)
 
     @staticmethod

@@ -13,6 +13,7 @@ from __future__ import annotations
 import audioop
 import os
 import selectors
+import shutil
 import signal
 import subprocess
 import tempfile
@@ -156,26 +157,78 @@ class EvdevHotkey:
                     pass
 
 
-# ── paste (xclip + xdotool) ───────────────────────────────────────────────────
-class X11Delivery:
-    def deliver(self, text: str, paste: bool = True, shortcut: str = "ctrl+v") -> None:
-        """Copia `text` pro clipboard. Se `paste`, cola com `shortcut` na janela
-        ativa. `paste=False` → só copia (o usuário cola manualmente)."""
+# ── paste — detecta Wayland vs X11 e usa as ferramentas certas ────────────────
+def _is_wayland() -> bool:
+    return bool(os.environ.get("WAYLAND_DISPLAY")) or \
+        os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland"
+
+
+def _have(cmd: str) -> bool:
+    return shutil.which(cmd) is not None
+
+
+class LinuxDelivery:
+    """Entrega o texto respeitando o servidor gráfico.
+
+    - Clipboard: wl-copy (Wayland) ou xclip (X11).
+    - Paste sintético: ydotool/wtype (Wayland) ou xdotool (X11). No GNOME
+      Wayland a injeção de teclas costuma ser bloqueada; se nenhuma ferramenta
+      de paste funciona, o texto fica no clipboard e retornamos False de
+      `deliver` pra o app avisar "copiado — cole com Ctrl+V".
+    """
+
+    def __init__(self) -> None:
+        self.wayland = _is_wayland()
+
+    def deliver(self, text: str, paste: bool = True, shortcut: str = "ctrl+v") -> bool:
+        """Retorna True se colou de fato; False se só copiou (o app notifica)."""
         self._set_clipboard(text)
         if not paste:
-            return
-        time.sleep(0.18)  # deixa a extensão de clipboard selecionar nosso texto
-        # solta modificadores presos (Ctrl+Alt+Espaço dessincroniza o X)
+            return False
+        time.sleep(0.15)
+        if self.wayland:
+            return self._paste_wayland(shortcut)
+        return self._paste_x11(shortcut)
+
+    # ── clipboard ─────────────────────────────────────────────────────────────
+    def _set_clipboard(self, text: str) -> None:
+        if self.wayland and _have("wl-copy"):
+            subprocess.run(["wl-copy"], input=text.encode("utf-8"), check=False)
+        else:
+            subprocess.run(["xclip", "-selection", "clipboard"],
+                           input=text.encode("utf-8"), check=False)
+
+    # ── paste X11 ─────────────────────────────────────────────────────────────
+    def _paste_x11(self, shortcut: str) -> bool:
+        if not _have("xdotool"):
+            return False
         subprocess.run(["xdotool", "keyup", "ctrl", "alt", "shift", "super"], check=False)
         time.sleep(0.05)
-        subprocess.run(["xdotool", "key", "--clearmodifiers", shortcut], check=False)
+        r = subprocess.run(["xdotool", "key", "--clearmodifiers", shortcut], check=False)
+        return r.returncode == 0
 
-    @staticmethod
-    def _set_clipboard(text: str) -> None:
-        subprocess.run(
-            ["xclip", "-selection", "clipboard"],
-            input=text.encode("utf-8"), check=False,
-        )
+    # ── paste Wayland ─────────────────────────────────────────────────────────
+    def _paste_wayland(self, shortcut: str) -> bool:
+        keys = shortcut.split("+")  # ex: ["ctrl","v"] ou ["ctrl","shift","v"]
+        # ydotool: injeta via uinput (precisa do daemon ydotoold rodando).
+        if _have("ydotool"):
+            # mapeia nomes → keycodes do Linux input (ydotool key usa codes)
+            code = {"ctrl": 29, "shift": 42, "v": 47}
+            seq = [f"{code[k]}:1" for k in keys if k in code] + \
+                  [f"{code[k]}:0" for k in reversed(keys) if k in code]
+            r = subprocess.run(["ydotool", "key", *seq], check=False,
+                               capture_output=True)
+            if r.returncode == 0:
+                return True
+        # wtype: precisa do protocolo virtual-keyboard (não no GNOME).
+        if _have("wtype"):
+            mods = [f"-M{k}" for k in keys[:-1]]
+            unmods = [f"-m{k}" for k in keys[:-1]]
+            r = subprocess.run(["wtype", *mods, "-k", keys[-1], *unmods],
+                               check=False, capture_output=True)
+            if r.returncode == 0:
+                return True
+        return False  # sem forma de colar → clipboard-only
 
 
 # ── fábrica ───────────────────────────────────────────────────────────────────
@@ -189,4 +242,4 @@ class LinuxPlatform:
         return EvdevHotkey(on_press, on_release, on_cancel)
 
     def make_delivery(self):
-        return X11Delivery()
+        return LinuxDelivery()
