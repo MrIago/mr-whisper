@@ -110,7 +110,7 @@ class SettingsWindow(QtWidgets.QWidget):
         layout.addWidget(cmds)
         info = QtWidgets.QLabel(
             "Say a keyword at the start of your speech to transform it (translate, "
-            "rewrite, save a note). Edit or create your own in the tray menu, under "
+            "rewrite, save a note). See them all in the tray menu, under "
             "\"Voice commands\"."
         )
         info.setWordWrap(True)

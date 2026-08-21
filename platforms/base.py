@@ -17,8 +17,27 @@ Peças:
 """
 from __future__ import annotations
 
+import array
+import math
 import sys
 from typing import Callable, Protocol
+
+
+def rms16(data: bytes) -> float:
+    """RMS de PCM 16-bit little-endian (0..~32767). Substitui audioop.rms, que
+    foi removido no Python 3.13. Usa `array` da stdlib (existe em toda versão)."""
+    if len(data) < 2:
+        return 0.0
+    samples = array.array("h")  # int16
+    samples.frombytes(data[: len(data) - (len(data) % 2)])
+    if not samples:
+        return 0.0
+    if sys.byteorder == "big":
+        samples.byteswap()
+    total = 0
+    for s in samples:
+        total += s * s
+    return math.sqrt(total / len(samples))
 
 
 class Recorder(Protocol):
@@ -42,9 +61,10 @@ class HotkeyListener(Protocol):
 
 
 class TextDelivery(Protocol):
-    """Entrega o texto na janela ativa (clipboard + paste sintético)."""
+    """Entrega o texto na janela ativa (clipboard + paste sintético).
+    Retorna True se colou de fato; False se só copiou (o app avisa)."""
 
-    def deliver(self, text: str) -> None: ...
+    def deliver(self, text: str, paste: bool = True, shortcut: str = "ctrl+v") -> bool: ...
 
 
 class Platform(Protocol):

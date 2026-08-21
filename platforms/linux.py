@@ -10,7 +10,6 @@
 """
 from __future__ import annotations
 
-import audioop
 import os
 import selectors
 import shutil
@@ -20,6 +19,8 @@ import tempfile
 import threading
 import time
 from typing import Callable
+
+from .base import rms16
 
 import evdev
 from evdev import ecodes
@@ -68,7 +69,7 @@ class ArecordRecorder:
                     chunk = f.read()
                     last += len(chunk)
                 if len(chunk) >= 2:
-                    rms = audioop.rms(chunk[: len(chunk) - (len(chunk) % 2)], 2)
+                    rms = rms16(chunk)
                     self.on_level(min(1.0, rms / 8000.0))
             except OSError:
                 pass

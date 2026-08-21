@@ -229,20 +229,32 @@ def _check_platform_setup(platform, tray) -> None:
                             "run/setup-linux-wayland.sh. Until then it copies to the clipboard.")
         except Exception:
             pass
-    # macOS: as permissões (Accessibility/Input Monitoring/Mic) o SO pede sozinho
-    # na 1ª tentativa; se pynput falhar silencioso, o balão de erro do press()/mic
-    # já orienta. (Não há como checar permissão sem tentar.)
+    elif platform.name == "macos":
+        # sem Accessibility/Input Monitoring, o pynput NÃO recebe teclas e NÃO
+        # injeta o paste, tudo em silêncio (o app parece morto). O macOS deixa
+        # checar isso sem tentar, via Quartz (vem com o pyobjc do pynput).
+        try:
+            from Quartz import CGPreflightListenEventAccess  # type: ignore
+            if not CGPreflightListenEventAccess():
+                warn = ("Grant Accessibility and Input Monitoring to mr-whisper in "
+                        "System Settings > Privacy & Security, then relaunch.")
+        except Exception:
+            pass
     if warn:
         tray.showMessage("mr-whisper setup", warn,
                          QtWidgets.QSystemTrayIcon.Warning, 10000)
 
 
 def main() -> int:
-    # No Linux, força o Qt a usar XWayland (xcb) em vez de Wayland nativo: sob
-    # Wayland nativo o compositor IGNORA move() da janela, então a pill flutuante
-    # ia pro canto e "descia" a cada uso. Via xcb o posicionamento funciona.
+    # No Linux, preferimos XWayland (xcb): sob Wayland NATIVO o compositor ignora
+    # move() da janela (a pill flutuante ia pro canto e "descia" a cada uso).
+    # Via xcb o posicionamento funciona, e cobre X11 puro também. Só forçamos se
+    # houver um servidor X/XWayland de fato (DISPLAY setado); senão deixamos o Qt
+    # escolher o backend nativo, pra funcionar em qualquer ambiente.
     # (Respeita QT_QPA_PLATFORM se o usuário já tiver setado.)
-    if sys.platform.startswith("linux") and not os.environ.get("QT_QPA_PLATFORM"):
+    if (sys.platform.startswith("linux")
+            and not os.environ.get("QT_QPA_PLATFORM")
+            and os.environ.get("DISPLAY")):
         os.environ["QT_QPA_PLATFORM"] = "xcb"
 
     app = QtWidgets.QApplication(sys.argv)

@@ -8,12 +8,13 @@ Dependências (instaladas pelo setup): sounddevice, pynput, pyperclip.
 """
 from __future__ import annotations
 
-import audioop
 import tempfile
 import threading
 import time
 import wave
 from typing import Callable
+
+from .base import rms16
 
 SAMPLE_RATE = 16000
 CHANNELS = 1
@@ -40,7 +41,7 @@ class SounddeviceRecorder:
         with self._lock:
             self._frames.append(buf)
         if len(buf) >= 2:
-            rms = audioop.rms(buf[: len(buf) - (len(buf) % 2)], 2)
+            rms = rms16(buf)
             self.on_level(min(1.0, rms / 8000.0))
 
     def start(self) -> None:
