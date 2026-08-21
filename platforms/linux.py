@@ -95,6 +95,11 @@ def _find_keyboards() -> list[evdev.InputDevice]:
     for path in evdev.list_devices():
         try:
             d = evdev.InputDevice(path)
+            # ignora o teclado virtual do ydotool: se escutássemos ele, o Ctrl+V
+            # que NÓS injetamos pra colar voltaria como evento e podia disparar
+            # gravação (loop).
+            if "ydotool" in (d.name or "").lower():
+                continue
             keys = d.capabilities().get(ecodes.EV_KEY, [])
             if ecodes.KEY_SPACE in keys and ecodes.KEY_A in keys:
                 kbs.append(d)

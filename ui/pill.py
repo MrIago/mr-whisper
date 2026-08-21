@@ -42,9 +42,15 @@ class Pill(QtWidgets.QWidget):
     def show_listening(self) -> None:
         self.mode = "listening"
         self.level = 0.0
+        # posiciona ANTES e DEPOIS do show: alguns WMs ignoram o move antes do
+        # mapeamento (janela ia pro canto), outros ignoram depois. Além disso um
+        # QTimer re-aplica logo após, pra corrigir geometria de tela que no boot
+        # ainda não estava pronta (era o "widget descendo a cada áudio").
+        self._position()
         self.show()
-        self._position()   # depois do show(): mover antes do mapeamento é
-        self.raise_()      # ignorado por vários WMs (janela ia parar em 0,0)
+        self._position()
+        self.raise_()
+        QtCore.QTimer.singleShot(50, self._position)
         self._timer.start()
 
     def set_level(self, lvl: float) -> None:

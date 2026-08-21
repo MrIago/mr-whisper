@@ -238,6 +238,13 @@ def _check_platform_setup(platform, tray) -> None:
 
 
 def main() -> int:
+    # No Linux, força o Qt a usar XWayland (xcb) em vez de Wayland nativo: sob
+    # Wayland nativo o compositor IGNORA move() da janela, então a pill flutuante
+    # ia pro canto e "descia" a cada uso. Via xcb o posicionamento funciona.
+    # (Respeita QT_QPA_PLATFORM se o usuário já tiver setado.)
+    if sys.platform.startswith("linux") and not os.environ.get("QT_QPA_PLATFORM"):
+        os.environ["QT_QPA_PLATFORM"] = "xcb"
+
     app = QtWidgets.QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
 
