@@ -162,8 +162,13 @@ def _stt_openrouter(key: str, model: str, wav_path: str) -> str:
     return (d["choices"][0]["message"]["content"] or "").strip()
 
 
-def transcribe_cloud(wav_path: str) -> str:
-    """Transcreve um wav pelo provider configurado. Lança em erro de config/HTTP."""
+# Limite seguro de tamanho por request (o Groq/OpenAI whisper aceitam ~25MB;
+# ficamos abaixo). Áudio maior é dividido em pedaços e transcrito em partes.
+_MAX_WAV_BYTES = 20 * 1024 * 1024
+
+
+def _transcribe_one(wav_path: str) -> str:
+    """Transcreve UM wav (dentro do limite) pelo provider configurado."""
     provider = _resolve_stt_provider()
     if provider == "groq":
         key = get("GROQ_API_KEY")
@@ -180,6 +185,61 @@ def transcribe_cloud(wav_path: str) -> str:
     if not key:
         raise RuntimeError("STT openrouter precisa de OPENROUTER_KEY. Rode: python setup.py")
     return _stt_openrouter(key, OPENROUTER_STT_MODEL, wav_path)
+
+
+def _split_wav(wav_path: str, max_bytes: int) -> list[str]:
+    """Divide um wav em pedaços que cabem em `max_bytes`, cortando por frames
+    (sem reencode). Retorna os caminhos dos pedaços temporários."""
+    import tempfile
+    import wave as _wave
+
+    with _wave.open(wav_path, "rb") as w:
+        params = w.getparams()
+        nframes = w.getnframes()
+        frame_bytes = params.sampwidth * params.nchannels
+        header = 44  # cabeçalho WAV
+        frames_per_chunk = max(1, (max_bytes - header) // frame_bytes)
+        parts = []
+        idx = 0
+        while idx < nframes:
+            w.setpos(idx)
+            chunk = w.readframes(frames_per_chunk)
+            fd, path = tempfile.mkstemp(prefix="mr-whisper-part-", suffix=".wav")
+            os.close(fd)
+            with _wave.open(path, "wb") as out:
+                out.setparams(params)
+                out.writeframes(chunk)
+            parts.append(path)
+            idx += frames_per_chunk
+    return parts
+
+
+def transcribe_cloud(wav_path: str) -> str:
+    """Transcreve um wav pelo provider configurado. Áudios longos são divididos
+    em pedaços (o Groq/OpenAI rejeitam requests grandes com HTTP 413) e o texto
+    é juntado. Lança em erro de config/HTTP."""
+    try:
+        size = os.path.getsize(wav_path)
+    except OSError:
+        size = 0
+    if size <= _MAX_WAV_BYTES:
+        return _transcribe_one(wav_path)
+
+    # áudio grande: divide, transcreve os pedaços EM PARALELO (o tempo total é o
+    # do pedaço mais lento, não a soma), e junta na ordem original.
+    from concurrent.futures import ThreadPoolExecutor
+
+    parts = _split_wav(wav_path, _MAX_WAV_BYTES)
+    try:
+        with ThreadPoolExecutor(max_workers=min(8, len(parts))) as ex:
+            texts = list(ex.map(_transcribe_one, parts))
+    finally:
+        for p in parts:
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
+    return " ".join(t for t in texts if t).strip()
 
 
 # ---- tradução na nuvem ----

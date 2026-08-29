@@ -34,6 +34,8 @@ MIN_HOLD = 0.3
 def _friendly_error(exc: Exception) -> str:
     """Traduz erros técnicos de STT em mensagem curta e humana."""
     s = str(exc).lower()
+    if "413" in s or "too large" in s or "entity too" in s:
+        return "That recording was too long for the provider. Try a shorter clip."
     if "429" in s or "rate" in s or "limit" in s or "quota" in s:
         return "Daily free limit reached. Try later, or add another provider in Settings"
     if "401" in s or "invalid" in s or "auth" in s or "key" in s:
