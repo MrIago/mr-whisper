@@ -20,7 +20,7 @@ import threading
 import time
 from typing import Callable
 
-from .base import rms16
+from .base import level_from_rms, rms16
 
 import evdev
 from evdev import ecodes
@@ -66,8 +66,7 @@ class ArecordRecorder:
                     chunk = f.read()
                     last += len(chunk)
                 if len(chunk) >= 2:
-                    rms = rms16(chunk)
-                    self.on_level(min(1.0, rms / 8000.0))
+                    self.on_level(level_from_rms(rms16(chunk)))
             except OSError:
                 pass
             time.sleep(0.05)

@@ -40,6 +40,19 @@ def rms16(data: bytes) -> float:
     return math.sqrt(total / len(samples))
 
 
+# curva do waveform: fala normal tem RMS baixo (~100), picos ~5000. Uma escala
+# LINEAR deixa quase tudo perto de zero (onda parada); usamos uma curva
+# logarítmica, que é como o ouvido percebe volume, pra a onda reagir bem em
+# volume normal e ainda ter margem no pico.
+_LOG_DEN = math.log1p(4000 / 50)
+
+
+def level_from_rms(rms: float) -> float:
+    """Converte o RMS bruto num nível 0..1 pro waveform, com curva log
+    (sensível a fala normal, não só a gritos)."""
+    return max(0.0, min(1.0, math.log1p(rms / 50) / _LOG_DEN))
+
+
 class Recorder(Protocol):
     """Grava o microfone. start() começa; stop() finaliza e devolve o path do
     wav (ou None se nada gravado). `on_level` recebe 0..1 durante a gravação."""

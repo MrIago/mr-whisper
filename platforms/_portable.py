@@ -14,7 +14,7 @@ import time
 import wave
 from typing import Callable
 
-from .base import rms16
+from .base import level_from_rms, rms16
 
 SAMPLE_RATE = 16000
 CHANNELS = 1
@@ -41,8 +41,7 @@ class SounddeviceRecorder:
         with self._lock:
             self._frames.append(buf)
         if len(buf) >= 2:
-            rms = rms16(buf)
-            self.on_level(min(1.0, rms / 8000.0))
+            self.on_level(level_from_rms(rms16(buf)))
 
     def start(self) -> None:
         import sounddevice as sd
