@@ -50,16 +50,16 @@ class Pill(QtWidgets.QWidget):
         self._pending_done = False
         self._done_kind = "copied"  # copied | note
 
+        self._timer = QtCore.QTimer(self)
+        self._timer.timeout.connect(self._tick)
+        self._timer.setInterval(33)  # ~30 fps
+
     SHRINK_FRAMES = 12  # ~0.4s pra virar círculo (curva ease-out aplicada)
 
     @staticmethod
     def _ease_out(t: float) -> float:
         # bézier de saída (aceleração decrescente): rápido no começo, freia no fim
         return 1.0 - (1.0 - t) ** 3
-
-        self._timer = QtCore.QTimer(self)
-        self._timer.timeout.connect(self._tick)
-        self._timer.setInterval(33)  # ~30 fps
 
     # ── largura atual da pill (anima com `shrink`; no fim = altura → círculo) ──
     def _pill_w(self) -> float:
