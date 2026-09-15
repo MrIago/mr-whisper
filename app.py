@@ -61,7 +61,7 @@ class Controller(QtCore.QObject):
     sig_level = QtCore.Signal(float)
     sig_transcribing = QtCore.Signal()
     sig_hide = QtCore.Signal()
-    sig_done = QtCore.Signal()   # pill: ícone "copiado" e some sozinha
+    sig_done = QtCore.Signal(str)   # pill: ícone final ("copied"|"note") e some
     sig_tray_state = QtCore.Signal(str)   # idle | recording | transcribing
     sig_notify = QtCore.Signal(str, str)  # (title, message) → balão do tray
     sig_history = QtCore.Signal()         # nova transcrição entrou no histórico
@@ -180,7 +180,7 @@ class Controller(QtCore.QObject):
                 text = translate.maybe_transform(text)
             # a pill fica no spinner (círculo) até aqui; só some depois do "done".
             if is_dump:
-                self.sig_done.emit()
+                self.sig_done.emit("note")
                 self.sig_notify.emit("mr-whisper", "Note saved 📝")
                 return
             # checa cancelamento SOB LOCK, imediatamente antes de colar, evita
@@ -197,7 +197,7 @@ class Controller(QtCore.QObject):
                 self.history.append(text)
                 self.history[:] = self.history[-10:]  # guarda as últimas 10
             self.sig_history.emit()
-            self.sig_done.emit()  # ícone de copiado no círculo, depois some
+            self.sig_done.emit("copied")  # ícone de copiado no círculo, depois some
             if not pasted:
                 # auto-paste desligado, ou o compositor (Wayland) bloqueou a
                 # injeção de teclas → o texto está no clipboard.

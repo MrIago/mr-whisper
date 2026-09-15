@@ -44,8 +44,18 @@ class Pill(QtWidgets.QWidget):
         self.level = 0.0
         self.bars = [0.08] * BARS
         self.phase = 0.0
-        self.shrink = 0.0           # 0 = largura cheia, 1 = círculo
+        self.shrink = 0.0           # 0 = largura cheia, 1 = círculo (ease-out)
+        self._shrink_t = 0.0        # progresso linear 0→1 do encolhimento
         self._done_frames = 0
+        self._pending_done = False
+        self._done_kind = "copied"  # copied | note
+
+    SHRINK_FRAMES = 12  # ~0.4s pra virar círculo (curva ease-out aplicada)
+
+    @staticmethod
+    def _ease_out(t: float) -> float:
+        # bézier de saída (aceleração decrescente): rápido no começo, freia no fim
+        return 1.0 - (1.0 - t) ** 3
 
         self._timer = QtCore.QTimer(self)
         self._timer.timeout.connect(self._tick)
@@ -75,13 +85,18 @@ class Pill(QtWidgets.QWidget):
         self.level = max(0.0, min(1.0, lvl))
 
     def show_transcribing(self) -> None:
-        self.mode = "transcribing"  # o _tick anima shrink 0→1 e gira o spinner
+        # inicia o encolhimento por TEMPO (curva ease-out), não por STT ter
+        # terminado — garante que a animação de virar círculo sempre apareça.
+        if self.mode != "transcribing":
+            self._shrink_t = 0.0
+        self.mode = "transcribing"
 
-    def show_done(self) -> None:
-        """Mostra o ícone de copiado no círculo por um instante e esconde."""
-        self.mode = "done"
-        self.shrink = 1.0
-        self._done_frames = 24  # ~0.8s visível
+    def show_done(self, kind: str = "copied") -> None:
+        """Ao terminar: mostra o ícone (copied|note) no círculo e some. Espera a
+        pill JÁ estar círculo (se o STT foi rápido demais, deixa o encolhimento
+        completar antes de trocar pro ícone)."""
+        self._done_kind = kind
+        self._pending_done = True  # o _tick vira "done" quando shrink ~ 1
 
     def hide_pill(self) -> None:
         self._timer.stop()
@@ -103,9 +118,21 @@ class Pill(QtWidgets.QWidget):
             wobble = 0.5 + 0.5 * math.sin(self.phase + i * 0.6)
             target = 0.08 + self.level * (0.25 + 0.75 * wobble)
             self.bars[i] += (target - self.bars[i]) * 0.4
-        # encolhimento pro círculo quando transcrevendo/done
-        want = 1.0 if self.mode in ("transcribing", "done") else 0.0
-        self.shrink += (want - self.shrink) * 0.28
+
+        # encolhimento: progresso por TEMPO + curva ease-out (bézier de saída).
+        # avança quando transcrevendo/done; recua se voltar pro listening.
+        if self.mode in ("transcribing", "done"):
+            self._shrink_t = min(1.0, self._shrink_t + 1.0 / self.SHRINK_FRAMES)
+        else:
+            self._shrink_t = 0.0
+        self.shrink = self._ease_out(self._shrink_t)
+
+        # só troca pro ícone final quando a pill JÁ virou círculo (shrink ~ 1)
+        if self._pending_done and self.shrink > 0.985:
+            self._pending_done = False
+            self.mode = "done"
+            self._done_frames = 24  # ~0.8s de ícone visível
+
         if self.mode == "done":
             self._done_frames -= 1
             if self._done_frames <= 0:
@@ -126,12 +153,18 @@ class Pill(QtWidgets.QWidget):
         p.setBrush(BG)
         p.drawRoundedRect(QtCore.QRectF(x0, 0, pw, H), H / 2, H / 2)
 
-        if self.mode == "listening" and self.shrink < 0.5:
+        cx, cy = W / 2, H / 2
+        if self.mode == "done":
+            if self._done_kind == "note":
+                self._draw_note(p, cx, cy, H)
+            else:
+                self._draw_copied(p, cx, cy, H)
+        elif self.shrink < 0.35:
+            # ainda largo: waveform (vai sumindo com fade conforme encolhe)
             self._draw_waveform(p, x0, W, H)
-        elif self.mode == "done":
-            self._draw_copied(p, W / 2, H / 2, H)
         else:
-            self._draw_spinner(p, W / 2, H / 2, H)
+            # já quase círculo: spinner
+            self._draw_spinner(p, cx, cy, H)
         p.end()
 
     def _draw_waveform(self, p, x0, W, H) -> None:
@@ -172,3 +205,22 @@ class Pill(QtWidgets.QWidget):
         p.drawRoundedRect(QtCore.QRectF(cx - s * 0.3, cy - s * 0.9, s * 1.2, s * 1.5), 3, 3)
         p.setBrush(BG)
         p.drawRoundedRect(QtCore.QRectF(cx - s * 0.9, cy - s * 0.4, s * 1.2, s * 1.5), 3, 3)
+
+    def _draw_note(self, p, cx, cy, H) -> None:
+        """Ícone de nota/anotação (folha com linhas de texto) em verde, para o
+        comando 'new dump', que salva nas notas em vez de colar."""
+        pop = 1.0 + 0.15 * max(0.0, math.sin(min(1.0, (24 - self._done_frames) / 6) * math.pi))
+        w = H * 0.30 * pop
+        h = H * 0.40 * pop
+        x, y = cx - w / 2, cy - h / 2
+        pen = QtGui.QPen(GREEN, 2.2)
+        pen.setJoinStyle(QtCore.Qt.RoundJoin)
+        pen.setCapStyle(QtCore.Qt.RoundCap)
+        p.setPen(pen)
+        p.setBrush(QtCore.Qt.NoBrush)
+        p.drawRoundedRect(QtCore.QRectF(x, y, w, h), 3, 3)   # folha
+        # linhas de texto
+        for i in range(3):
+            ly = y + h * (0.28 + i * 0.22)
+            p.drawLine(QtCore.QPointF(x + w * 0.22, ly),
+                       QtCore.QPointF(x + w * 0.78, ly))
