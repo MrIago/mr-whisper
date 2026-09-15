@@ -78,4 +78,15 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
             p.drawLine(14, 50, 50, 14)
 
         p.end()
-        return QtGui.QIcon(pix)
+        # No macOS a barra de menu espera um ícone "template" (mask), senão um
+        # pixmap colorido pode não aparecer. Marcamos como mask; o macOS o
+        # recolore pro tema (claro/escuro). Nos outros OS, ícone colorido normal.
+        import sys
+        if sys.platform == "darwin":
+            pix.setDevicePixelRatio(2.0)  # nítido na barra ~22px
+            pix.setMask(pix.createMaskFromColor(QtCore.Qt.transparent,
+                                                QtCore.Qt.MaskInColor))
+        icon = QtGui.QIcon(pix)
+        if sys.platform == "darwin":
+            icon.setIsMask(True)
+        return icon
