@@ -61,6 +61,7 @@ class Controller(QtCore.QObject):
     sig_level = QtCore.Signal(float)
     sig_transcribing = QtCore.Signal()
     sig_hide = QtCore.Signal()
+    sig_done = QtCore.Signal()   # pill: ícone "copiado" e some sozinha
     sig_tray_state = QtCore.Signal(str)   # idle | recording | transcribing
     sig_notify = QtCore.Signal(str, str)  # (title, message) → balão do tray
     sig_history = QtCore.Signal()         # nova transcrição entrou no histórico
@@ -82,6 +83,7 @@ class Controller(QtCore.QObject):
         self.sig_level.connect(pill.set_level)
         self.sig_transcribing.connect(pill.show_transcribing)
         self.sig_hide.connect(pill.hide_pill)
+        self.sig_done.connect(pill.show_done)
 
     def compute_state(self) -> str:
         """O estado do tray derivado das flags ATUAIS. Lido pelo slot na UI no
@@ -176,14 +178,16 @@ class Controller(QtCore.QObject):
             if text and translate.parse(text):
                 self.sig_transcribing.emit()
                 text = translate.maybe_transform(text)
-            self.sig_hide.emit()
+            # a pill fica no spinner (círculo) até aqui; só some depois do "done".
             if is_dump:
+                self.sig_done.emit()
                 self.sig_notify.emit("mr-whisper", "Note saved 📝")
                 return
             # checa cancelamento SOB LOCK, imediatamente antes de colar, evita
             # colar um texto depois de o usuário ter apertado ESC.
             with self.lock:
                 if self._cancel or not text:
+                    self.sig_hide.emit()
                     return
             auto = (config.get("MRWHISPER_AUTO_PASTE", "1") or "1") != "0"
             shortcut = config.get("MRWHISPER_PASTE_SHORTCUT", "ctrl+v") or "ctrl+v"
@@ -193,6 +197,7 @@ class Controller(QtCore.QObject):
                 self.history.append(text)
                 self.history[:] = self.history[-10:]  # guarda as últimas 10
             self.sig_history.emit()
+            self.sig_done.emit()  # ícone de copiado no círculo, depois some
             if not pasted:
                 # auto-paste desligado, ou o compositor (Wayland) bloqueou a
                 # injeção de teclas → o texto está no clipboard.
