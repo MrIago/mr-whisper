@@ -80,18 +80,21 @@ class SounddeviceRecorder:
 
 # ── teclado (pynput) ──────────────────────────────────────────────────────────
 class PynputHotkey:
-    """Hold-to-talk via pynput: Ctrl+Alt+Espaço segura/solta; Esc cancela.
-    run() bloqueia no listener."""
+    """Hold-to-talk via pynput com atalho CONFIGURÁVEL (core.config.hotkey_combo).
+    Segura os modificadores + tecla → press; solta → release; Esc cancela."""
 
     def __init__(self, on_press, on_release, on_cancel) -> None:
         self.on_press = on_press
         self.on_release = on_release
         self.on_cancel = on_cancel
-        self.held = {"ctrl": False, "alt": False, "space": False}
+        from core import config
+        self.mods, self.key = config.hotkey_combo()  # ex: ({"alt"}, "space")
+        self.held = {m: False for m in self.mods}
+        self.held["_key"] = False
         self.active = False
 
     def _update(self):
-        combo = self.held["ctrl"] and self.held["alt"] and self.held["space"]
+        combo = self.held["_key"] and all(self.held[m] for m in self.mods)
         if combo and not self.active:
             self.active = True
             self.on_press()
@@ -102,38 +105,54 @@ class PynputHotkey:
     def run(self) -> None:
         from pynput import keyboard as kb
 
-        def is_ctrl(k):
-            return k in (kb.Key.ctrl, kb.Key.ctrl_l, kb.Key.ctrl_r)
+        # mapeia nome do modificador → conjunto de Keys do pynput (esq/dir)
+        mod_keys = {
+            "ctrl": {kb.Key.ctrl, kb.Key.ctrl_l, kb.Key.ctrl_r},
+            "alt": {kb.Key.alt, kb.Key.alt_l, kb.Key.alt_r, kb.Key.alt_gr},
+            "shift": {kb.Key.shift, kb.Key.shift_l, kb.Key.shift_r},
+            "cmd": {kb.Key.cmd, getattr(kb.Key, "cmd_l", kb.Key.cmd),
+                    getattr(kb.Key, "cmd_r", kb.Key.cmd)},
+            "super": {kb.Key.cmd},
+        }
+        key_map = {"space": kb.Key.space, "enter": kb.Key.enter, "tab": kb.Key.tab}
+        trigger = key_map.get(self.key)  # None se for uma letra comum
 
-        def is_alt(k):
-            return k in (kb.Key.alt, kb.Key.alt_l, kb.Key.alt_r, kb.Key.alt_gr)
+        def which_mod(k):
+            for name in self.mods:
+                if k in mod_keys.get(name, set()):
+                    return name
+            return None
+
+        def is_trigger(k):
+            if trigger is not None:
+                return k == trigger
+            # tecla comum (letra): pynput entrega KeyCode com .char
+            return getattr(k, "char", None) == self.key
 
         def on_press(k):
-            if is_ctrl(k):
-                self.held["ctrl"] = True
-            elif is_alt(k):
-                self.held["alt"] = True
-            elif k == kb.Key.space:
-                self.held["space"] = True
-            elif k == kb.Key.esc:
+            if k == kb.Key.esc:
                 self.on_cancel()
                 return
+            m = which_mod(k)
+            if m:
+                self.held[m] = True
+            elif is_trigger(k):
+                self.held["_key"] = True
             else:
                 return
             self._update()
 
         def on_release(k):
-            if is_ctrl(k):
-                self.held["ctrl"] = False
-            elif is_alt(k):
-                self.held["alt"] = False
-            elif k == kb.Key.space:
-                self.held["space"] = False
+            m = which_mod(k)
+            if m:
+                self.held[m] = False
+            elif is_trigger(k):
+                self.held["_key"] = False
             else:
                 return
             self._update()
 
-        _log("escutando teclado (pynput), Ctrl+Alt+Espaço")
+        _log(f"escutando teclado (pynput), {'+'.join(sorted(self.mods))}+{self.key}")
         with kb.Listener(on_press=on_press, on_release=on_release) as listener:
             listener.join()
 

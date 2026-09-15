@@ -150,8 +150,33 @@ class SettingsWindow(QtWidgets.QWidget):
         srow.addWidget(self.paste_shortcut, 1)
         layout.addLayout(srow)
 
+        # ── Hotkey ────────────────────────────────────────────────────────────
         layout.addSpacing(8)
-        hint = QtWidgets.QLabel("Hold  Ctrl + Alt + Space  to dictate. Esc cancels.")
+        hk_title = QtWidgets.QLabel("Hotkey")
+        hk_title.setStyleSheet("font-size:16px; font-weight:600;")
+        layout.addWidget(hk_title)
+
+        hkrow = QtWidgets.QHBoxLayout()
+        hkrow.addWidget(QtWidgets.QLabel("Hold to dictate:"))
+        self.hotkey = QtWidgets.QComboBox()
+        # (valor salvo, rótulo mostrado). No Mac, Alt = Option.
+        import sys as _sys
+        alt_name = "Option" if _sys.platform == "darwin" else "Alt"
+        for value, label in (
+            ("ctrl+alt+space", f"Ctrl + {alt_name} + Space"),
+            ("alt+space", f"{alt_name} + Space"),
+            ("ctrl+shift+space", "Ctrl + Shift + Space"),
+            ("shift+alt+space", f"Shift + {alt_name} + Space"),
+            ("super+space", "Super/Cmd + Space"),
+        ):
+            self.hotkey.addItem(label, value)
+        self.hotkey.currentIndexChanged.connect(self._save_hotkey)
+        hkrow.addWidget(self.hotkey, 1)
+        layout.addLayout(hkrow)
+
+        hint = QtWidgets.QLabel("Hold it, speak, release. Esc cancels. "
+                                "Changing it takes effect after you quit and reopen.")
+        hint.setWordWrap(True)
         hint.setStyleSheet("color:#888;")
         layout.addWidget(hint)
 
@@ -172,6 +197,12 @@ class SettingsWindow(QtWidgets.QWidget):
         self.auto_paste.setChecked((config.get("MRWHISPER_AUTO_PASTE", "1") or "1") != "0")
         sc = config.get("MRWHISPER_PASTE_SHORTCUT", "ctrl+v") or "ctrl+v"
         self.paste_shortcut.setCurrentIndex(max(0, self.paste_shortcut.findData(sc)))
+        # hotkey (default por OS via hotkey_combo → reconstrói o valor salvo)
+        import sys as _sys
+        hk_default = "alt+space" if _sys.platform == "darwin" else "ctrl+alt+space"
+        hk = (config.get("MRWHISPER_HOTKEY", hk_default) or hk_default).lower()
+        i = self.hotkey.findData(hk)
+        self.hotkey.setCurrentIndex(i if i >= 0 else max(0, self.hotkey.findData(hk_default)))
         self._loading = False
         self._update_paste_hint()
 
@@ -224,6 +255,11 @@ class SettingsWindow(QtWidgets.QWidget):
         if getattr(self, "_loading", False):
             return
         config.set_values({"MRWHISPER_LANG": self.lang.currentData()})
+
+    def _save_hotkey(self) -> None:
+        if getattr(self, "_loading", False):
+            return
+        config.set_values({"MRWHISPER_HOTKEY": self.hotkey.currentData()})
 
     def _save_paste(self) -> None:
         if getattr(self, "_loading", False):

@@ -21,6 +21,10 @@ Chaves/prefs conhecidas:
 - MRWHISPER_PASTE_SHORTCUT, atalho de colar: "ctrl+v" (default) | "ctrl+shift+v"
 - MRWHISPER_AUTO_PASTE  , colar automático após transcrever: "1" (default) | "0"
                           (se "0", só copia pro clipboard, você cola manualmente)
+- MRWHISPER_HOTKEY      , atalho hold-to-talk (ex: "ctrl+alt+space", "alt+space",
+                          "ctrl+shift+space"). Default: Linux/Windows =
+                          "ctrl+alt+space"; macOS = "alt+space" (Option+Espaço,
+                          livre no Mac; Ctrl+Espaço conflita com troca de teclado).
 """
 from __future__ import annotations
 
@@ -54,6 +58,25 @@ def get(name: str, default: str | None = None) -> str | None:
         return env.strip()
     v = _read_file().get(name)
     return v.strip() if v and v.strip() else default
+
+
+def hotkey_combo() -> tuple[set[str], str]:
+    """Atalho hold-to-talk parseado: (set de modificadores, tecla). Ex:
+    ({"ctrl","alt"}, "space"). Default por OS: macOS usa "alt+space" (Ctrl+Espaço
+    conflita com a troca de teclado do Mac); os demais usam "ctrl+alt+space"."""
+    import sys
+    default = "alt+space" if sys.platform == "darwin" else "ctrl+alt+space"
+    raw = (get("MRWHISPER_HOTKEY", default) or default).lower()
+    parts = [p.strip() for p in raw.replace(" ", "").split("+") if p.strip()]
+    if not parts:
+        parts = default.split("+")
+    key = parts[-1]
+    mods = {m for m in parts[:-1] if m in ("ctrl", "alt", "shift", "cmd", "super")}
+    if not mods:  # atalho sem modificador é perigoso; volta pro default
+        parts = default.split("+")
+        key = parts[-1]
+        mods = set(parts[:-1])
+    return mods, key
 
 
 def set_values(pairs: dict[str, str]) -> None:

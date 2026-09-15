@@ -26,9 +26,6 @@ import evdev
 from evdev import ecodes
 
 ARECORD_DEVICE = os.environ.get("VOICEFLOW_MIC", "default")
-CTRL_KEYS = {ecodes.KEY_LEFTCTRL, ecodes.KEY_RIGHTCTRL}
-ALT_KEYS = {ecodes.KEY_LEFTALT, ecodes.KEY_RIGHTALT}
-TRIGGER_KEY = ecodes.KEY_SPACE
 CANCEL_KEY = ecodes.KEY_ESC
 
 
@@ -109,25 +106,44 @@ def _find_keyboards() -> list[evdev.InputDevice]:
     return kbs
 
 
+# nome de modificador → conjunto de keycodes evdev (esq/dir)
+_MOD_CODES = {
+    "ctrl": {ecodes.KEY_LEFTCTRL, ecodes.KEY_RIGHTCTRL},
+    "alt": {ecodes.KEY_LEFTALT, ecodes.KEY_RIGHTALT},
+    "shift": {ecodes.KEY_LEFTSHIFT, ecodes.KEY_RIGHTSHIFT},
+    "super": {ecodes.KEY_LEFTMETA, ecodes.KEY_RIGHTMETA},
+    "cmd": {ecodes.KEY_LEFTMETA, ecodes.KEY_RIGHTMETA},
+}
+_KEY_CODES = {"space": ecodes.KEY_SPACE, "enter": ecodes.KEY_ENTER, "tab": ecodes.KEY_TAB}
+
+
 class EvdevHotkey:
     def __init__(self, on_press, on_release, on_cancel) -> None:
         self.on_press = on_press
         self.on_release = on_release
         self.on_cancel = on_cancel
+        from core import config
+        mods, key = config.hotkey_combo()  # ex: ({"ctrl","alt"}, "space")
+        # keycodes de cada modificador e da tecla-gatilho
+        self._mod_codes = {m: _MOD_CODES.get(m, set()) for m in mods}
+        self._trigger = _KEY_CODES.get(key, ecodes.KEY_SPACE)
+        self._label = "+".join(sorted(mods)) + "+" + key
 
     def run(self) -> None:
         keyboards = _find_keyboards()
         if not keyboards:
             _log("ERRO: nenhum teclado evdev acessível (grupo 'input'? relogar?).")
         else:
-            _log(f"escutando {len(keyboards)} teclado(s): {[k.name for k in keyboards]}")
+            _log(f"escutando {len(keyboards)} teclado(s) [{self._label}]: "
+                 f"{[k.name for k in keyboards]}")
 
-        held = {"ctrl": False, "alt": False, "space": False}
+        held = {m: False for m in self._mod_codes}
+        held["_key"] = False
         active = False
 
         def update():
             nonlocal active
-            combo = held["ctrl"] and held["alt"] and held["space"]
+            combo = held["_key"] and all(held[m] for m in self._mod_codes)
             if combo and not active:
                 active = True
                 self.on_press()
@@ -147,17 +163,20 @@ class EvdevHotkey:
                             continue
                         pressed = event.value in (1, 2)
                         code = event.code
-                        if code in CTRL_KEYS:
-                            held["ctrl"] = pressed
-                        elif code in ALT_KEYS:
-                            held["alt"] = pressed
-                        elif code == TRIGGER_KEY:
-                            held["space"] = pressed
-                        elif code == CANCEL_KEY and event.value == 1:
-                            self.on_cancel()
-                            continue
-                        else:
-                            continue
+                        matched = False
+                        for m, codes in self._mod_codes.items():
+                            if code in codes:
+                                held[m] = pressed
+                                matched = True
+                                break
+                        if not matched:
+                            if code == self._trigger:
+                                held["_key"] = pressed
+                            elif code == CANCEL_KEY and event.value == 1:
+                                self.on_cancel()
+                                continue
+                            else:
+                                continue
                         update()
                 except OSError:
                     pass
