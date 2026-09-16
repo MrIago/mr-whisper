@@ -335,20 +335,22 @@ def main() -> int:
     tray.setContextMenu(menu)
     tray.show()
 
-    # abre settings no 1º uso (sem chave configurada ainda)
-    if not any(config.get(k) for k in ("GROQ_API_KEY", "OPENAI_API_KEY", "OPENROUTER_KEY")):
-        settings_win.show()
-        tray.showMessage("mr-whisper", "Add an API key in Settings to start.",
-                         QtWidgets.QSystemTrayIcon.Information, 5000)
-    else:
-        print(f"transcrição na nuvem: {cloud._resolve_stt_provider()}", flush=True)
-
     # ── hotkey em thread ──────────────────────────────────────────────────────
     hotkey = platform.make_hotkey(controller.press, controller.release, controller.cancel)
     threading.Thread(target=hotkey.run, daemon=True).start()
 
-    # aviso de setup por plataforma (permissões / Wayland) no 1º uso
-    _check_platform_setup(platform, tray)
+    # 1º uso (sem chave): abre o wizard passo-a-passo; senão, já está pronto.
+    has_key = any(config.get(k) for k in ("GROQ_API_KEY", "OPENAI_API_KEY", "OPENROUTER_KEY"))
+    if not has_key:
+        from ui.wizard import Wizard
+        wiz = Wizard()
+        wiz.finished.connect(lambda: _check_platform_setup(platform, tray))
+        wiz.show(); wiz.raise_(); wiz.activateWindow()
+        # mantém referência pra não ser coletado
+        app._wizard = wiz  # type: ignore[attr-defined]
+    else:
+        print(f"transcrição na nuvem: {cloud._resolve_stt_provider()}", flush=True)
+        _check_platform_setup(platform, tray)
 
     return app.exec()
 
