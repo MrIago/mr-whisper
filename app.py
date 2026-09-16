@@ -65,6 +65,7 @@ class Controller(QtCore.QObject):
     sig_tray_state = QtCore.Signal(str)   # idle | recording | transcribing
     sig_notify = QtCore.Signal(str, str)  # (title, message) → balão do tray
     sig_history = QtCore.Signal()         # nova transcrição entrou no histórico
+    sig_update = QtCore.Signal(str)       # há versão nova disponível (vX.Y.Z)
 
     def __init__(self, platform: base.Platform, pill: Pill) -> None:
         super().__init__()
@@ -286,8 +287,32 @@ def main() -> int:
                                             QtWidgets.QSystemTrayIcon.Information, 4000))
     menu = QtWidgets.QMenu()
 
-    # dica de uso (hold-to-talk) sempre visível no topo
-    hint = menu.addAction("Hold Ctrl+Alt+Space to dictate")
+    # item de update (oculto até a checagem achar versão nova)
+    from core import updater
+    act_update = menu.addAction("")
+    act_update.setVisible(False)
+
+    def offer_update(newv: str):
+        act_update.setText(f"⬆ Update available (v{newv})")
+        act_update.setVisible(True)
+
+        def do_update():
+            QtWidgets.QApplication.clipboard().setText(updater.update_command())
+            QtGui.QDesktopServices.openUrl(QtCore.QUrl(updater.PROJECT_PAGE))
+            tray.showMessage("mr-whisper",
+                             "Update command copied. Paste it in a terminal, "
+                             "or download from the page that opened.",
+                             QtWidgets.QSystemTrayIcon.Information, 8000)
+        act_update.triggered.connect(do_update)
+        tray.showMessage("mr-whisper", f"Version {newv} is available. "
+                         "See the tray menu to update.",
+                         QtWidgets.QSystemTrayIcon.Information, 6000)
+    controller.sig_update.connect(offer_update)
+
+    # dica de uso (hold-to-talk) sempre visível no topo, com o atalho real
+    _mods, _key = config.hotkey_combo()
+    _combo = " + ".join([m.capitalize() for m in sorted(_mods)] + [_key.capitalize()])
+    hint = menu.addAction(f"Hold {_combo} to dictate")
     hint.setEnabled(False)
 
     # histórico das últimas transcrições, clicar recopia pro clipboard
@@ -351,6 +376,13 @@ def main() -> int:
     else:
         print(f"transcrição na nuvem: {cloud._resolve_stt_provider()}", flush=True)
         _check_platform_setup(platform, tray)
+
+    # checa update em background (não bloqueia; falha silenciosa)
+    def _check_update():
+        newv = updater.check()
+        if newv:
+            controller.sig_update.emit(newv)
+    threading.Thread(target=_check_update, daemon=True).start()
 
     return app.exec()
 
