@@ -35,6 +35,151 @@ PROVIDERS = {
 }
 
 
+# mapa: nomes de modificador do parser (core.config.hotkey_combo espera
+# ctrl/alt/shift/cmd/super) por OS. No Mac, Alt = Option e Meta = Command.
+def _mod_names() -> dict:
+    import sys
+    if sys.platform == "darwin":
+        # rótulos amigáveis do Mac
+        return {"ctrl": "Control", "alt": "Option", "shift": "Shift",
+                "cmd": "Command", "super": "Command"}
+    return {"ctrl": "Ctrl", "alt": "Alt", "shift": "Shift",
+            "cmd": "Cmd", "super": "Super"}
+
+
+class _HotkeyCapture(QtWidgets.QPushButton):
+    """Botão que captura um atalho ao vivo: clica, segura as teclas, elas
+    aparecem, e emite o combo (ex: 'ctrl+alt+space'). Só aceita combo com ao
+    menos um modificador + uma tecla comum (o mesmo que o parser exige)."""
+    captured = QtCore.Signal(str)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._combo = ""
+        self._capturing = False
+        self._mods: set[str] = set()
+        self._key = ""
+        self.setCheckable(True)
+        self.clicked.connect(self._toggle)
+        self.setFocusPolicy(QtCore.Qt.StrongFocus)
+        self._render()
+
+    # texto salvo → mostrado
+    def set_combo(self, combo: str) -> None:
+        self._combo = (combo or "").lower()
+        self._render()
+
+    def _label_for(self, combo: str) -> str:
+        if not combo:
+            return "not set"
+        names = _mod_names()
+        parts = [p for p in combo.split("+") if p]
+        out = []
+        for p in parts:
+            if p in names:
+                out.append(names[p])
+            else:
+                out.append(p.capitalize() if len(p) > 1 else p.upper())
+        return " + ".join(out)
+
+    def _render(self) -> None:
+        if self._capturing:
+            live = self._live_combo()
+            self.setText(f"{self._label_for(live)}   (press keys, Esc to cancel)"
+                         if live else "press the keys   (Esc to cancel)")
+            self.setStyleSheet("text-align:left; padding:6px; color:#4a9; "
+                               "border:1px solid #4a9;")
+        else:
+            self.setText(f"{self._label_for(self._combo)}    (click to change)")
+            self.setStyleSheet("text-align:left; padding:6px;")
+
+    def _toggle(self) -> None:
+        self._capturing = self.isChecked()
+        self._mods.clear()
+        self._key = ""
+        self._render()
+        if self._capturing:
+            self.grabKeyboard()
+        else:
+            self.releaseKeyboard()
+
+    # ── captura ──────────────────────────────────────────────────────────────
+    _QT_MOD = {
+        QtCore.Qt.Key_Control: "ctrl",
+        QtCore.Qt.Key_Alt: "alt",
+        QtCore.Qt.Key_AltGr: "alt",
+        QtCore.Qt.Key_Shift: "shift",
+        QtCore.Qt.Key_Meta: "cmd",
+    }
+    # teclas comuns cujo nome o parser/plataformas reconhecem
+    _QT_KEY = {
+        QtCore.Qt.Key_Space: "space",
+        QtCore.Qt.Key_Return: "enter",
+        QtCore.Qt.Key_Enter: "enter",
+        QtCore.Qt.Key_Tab: "tab",
+        QtCore.Qt.Key_Backspace: "backspace",
+        QtCore.Qt.Key_CapsLock: "capslock",
+    }
+
+    def _key_name(self, ev) -> str | None:
+        k = ev.key()
+        if k in self._QT_MOD:
+            return None
+        if k in self._QT_KEY:
+            return self._QT_KEY[k]
+        # letras/números: usa o texto
+        t = ev.text().strip().lower()
+        if t and t.isprintable() and len(t) == 1 and t.isalnum():
+            return t
+        # F1..F12
+        if QtCore.Qt.Key_F1 <= k <= QtCore.Qt.Key_F12:
+            return f"f{k - QtCore.Qt.Key_F1 + 1}"
+        return None
+
+    def _live_combo(self) -> str:
+        mods = "+".join(m for m in ("ctrl", "alt", "shift", "cmd", "super")
+                        if m in self._mods)
+        if self._key:
+            return f"{mods}+{self._key}" if mods else self._key
+        return mods
+
+    def keyPressEvent(self, ev) -> None:
+        if not self._capturing:
+            return super().keyPressEvent(ev)
+        if ev.key() == QtCore.Qt.Key_Escape:
+            self.setChecked(False)
+            self._toggle()
+            return
+        if ev.key() in self._QT_MOD:
+            self._mods.add(self._QT_MOD[ev.key()])
+            self._render()
+            return
+        name = self._key_name(ev)
+        if name:
+            self._key = name
+            # combo completo? precisa de ao menos 1 modificador + tecla comum.
+            if self._mods:
+                combo = self._live_combo()
+                self._combo = combo
+                self._capturing = False
+                self.setChecked(False)
+                self.releaseKeyboard()
+                self._render()
+                self.captured.emit(combo)
+            else:
+                # sem modificador ainda: mostra, mas não salva (parser recusaria)
+                self._render()
+        ev.accept()
+
+    def keyReleaseEvent(self, ev) -> None:
+        if not self._capturing:
+            return super().keyReleaseEvent(ev)
+        if ev.key() in self._QT_MOD and not ev.isAutoRepeat():
+            self._mods.discard(self._QT_MOD[ev.key()])
+            self._render()
+        ev.accept()
+
+
 class SettingsWindow(QtWidgets.QWidget):
     # resultado da validação (vem de thread) → UI
     _validated = QtCore.Signal(bool, str)
@@ -75,7 +220,7 @@ class SettingsWindow(QtWidgets.QWidget):
         # campo da chave
         krow = QtWidgets.QHBoxLayout()
         self.key_edit = QtWidgets.QLineEdit()
-        self.key_edit.setPlaceholderText("paste your API key…")
+        self.key_edit.setPlaceholderText("paste your API key")
         self.key_edit.setEchoMode(QtWidgets.QLineEdit.Password)
         krow.addWidget(self.key_edit, 1)
         self.validate_btn = QtWidgets.QPushButton("Validate & Save")
@@ -158,24 +303,16 @@ class SettingsWindow(QtWidgets.QWidget):
 
         hkrow = QtWidgets.QHBoxLayout()
         hkrow.addWidget(QtWidgets.QLabel("Hold to dictate:"))
-        self.hotkey = QtWidgets.QComboBox()
-        # (valor salvo, rótulo mostrado). No Mac, Alt = Option.
-        import sys as _sys
-        alt_name = "Option" if _sys.platform == "darwin" else "Alt"
-        for value, label in (
-            ("ctrl+alt+space", f"Ctrl + {alt_name} + Space"),
-            ("alt+space", f"{alt_name} + Space"),
-            ("ctrl+shift+space", "Ctrl + Shift + Space"),
-            ("shift+alt+space", f"Shift + {alt_name} + Space"),
-            ("super+space", "Super/Cmd + Space"),
-        ):
-            self.hotkey.addItem(label, value)
-        self.hotkey.currentIndexChanged.connect(self._save_hotkey)
+        # capturador: clica, aperta as teclas, elas aparecem, e salva.
+        self.hotkey = _HotkeyCapture()
+        self.hotkey.captured.connect(self._save_hotkey)
         hkrow.addWidget(self.hotkey, 1)
         layout.addLayout(hkrow)
 
-        hint = QtWidgets.QLabel("Hold it, speak, release. Esc cancels. "
-                                "Changing it takes effect after you quit and reopen.")
+        hint = QtWidgets.QLabel("Click the box, then hold the keys you want "
+                                "(at least one of Ctrl/Alt/Shift/Cmd plus one key). "
+                                "Hold it to speak, release to paste; Esc cancels. "
+                                "A new hotkey takes effect after you quit and reopen.")
         hint.setWordWrap(True)
         hint.setStyleSheet("color:#888;")
         layout.addWidget(hint)
@@ -197,12 +334,11 @@ class SettingsWindow(QtWidgets.QWidget):
         self.auto_paste.setChecked((config.get("MRWHISPER_AUTO_PASTE", "1") or "1") != "0")
         sc = config.get("MRWHISPER_PASTE_SHORTCUT", "ctrl+v") or "ctrl+v"
         self.paste_shortcut.setCurrentIndex(max(0, self.paste_shortcut.findData(sc)))
-        # hotkey (default por OS via hotkey_combo → reconstrói o valor salvo)
+        # hotkey (default por OS): mostra o combo salvo no capturador
         import sys as _sys
         hk_default = "alt+space" if _sys.platform == "darwin" else "ctrl+alt+space"
         hk = (config.get("MRWHISPER_HOTKEY", hk_default) or hk_default).lower()
-        i = self.hotkey.findData(hk)
-        self.hotkey.setCurrentIndex(i if i >= 0 else max(0, self.hotkey.findData(hk_default)))
+        self.hotkey.set_combo(hk)
         self._loading = False
         self._update_paste_hint()
 
@@ -220,7 +356,7 @@ class SettingsWindow(QtWidgets.QWidget):
             self._set_status(False, "paste a key first")
             return
         self.validate_btn.setEnabled(False)
-        self.status.setText("validating…")
+        self.status.setText("validating")
         self.status.setStyleSheet("color:#888;")
         meta = PROVIDERS[self._current_provider()]
 
@@ -256,10 +392,11 @@ class SettingsWindow(QtWidgets.QWidget):
             return
         config.set_values({"MRWHISPER_LANG": self.lang.currentData()})
 
-    def _save_hotkey(self) -> None:
+    def _save_hotkey(self, combo: str) -> None:
         if getattr(self, "_loading", False):
             return
-        config.set_values({"MRWHISPER_HOTKEY": self.hotkey.currentData()})
+        if combo:
+            config.set_values({"MRWHISPER_HOTKEY": combo})
 
     def _save_paste(self) -> None:
         if getattr(self, "_loading", False):
