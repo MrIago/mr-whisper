@@ -182,7 +182,7 @@ class Controller(QtCore.QObject):
             # a pill fica no spinner (círculo) até aqui; só some depois do "done".
             if is_dump:
                 self.sig_done.emit("note")
-                self.sig_notify.emit("mr-whisper", "Note saved 📝")
+                self.sig_notify.emit("mr-whisper", "Note saved")
                 return
             # checa cancelamento SOB LOCK, imediatamente antes de colar, evita
             # colar um texto depois de o usuário ter apertado ESC.
@@ -293,7 +293,7 @@ def main() -> int:
     act_update.setVisible(False)
 
     def offer_update(newv: str):
-        act_update.setText(f"⬆ Update available (v{newv})")
+        act_update.setText(f"Update available  (v{newv})")
         act_update.setVisible(True)
 
         def do_update():

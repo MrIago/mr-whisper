@@ -75,15 +75,15 @@ class Wizard(QtWidgets.QWidget):
     # ── páginas ───────────────────────────────────────────────────────────────
     def _page_welcome(self) -> QtWidgets.QWidget:
         page = QtWidgets.QWidget()
-        v = self._header("Welcome to mr-whisper 🎙️",
+        v = self._header("Welcome to mr-whisper",
                          "Voice dictation anywhere. Hold a hotkey, speak, release, "
                          "and your words are typed where your cursor is.")
         body = QtWidgets.QLabel(
-            "How it works:\n\n"
-            "1. Hold the hotkey (Ctrl+Alt+Space; Option+Space on Mac)\n"
-            "2. Speak while holding\n"
-            "3. Release, and the text is pasted for you\n\n"
-            "It runs in the tray. This quick setup gets you going.")
+            "The whole app is one gesture:\n\n"
+            "Hold the hotkey (Ctrl+Alt+Space, or Option+Space on Mac).\n"
+            "Speak while you hold it.\n"
+            "Release, and the text lands where your cursor is.\n\n"
+            "It lives in the tray. This short setup gets you there.")
         body.setStyleSheet("font-size:14px; line-height:1.5;")
         body.setWordWrap(True)
         v.addWidget(body)
@@ -136,14 +136,14 @@ class Wizard(QtWidgets.QWidget):
                          "for you. Grant these once, then relaunch.")
         if sys.platform == "darwin":
             txt = ("macOS · System Settings > Privacy & Security:\n\n"
-                   "• Microphone — to hear you\n"
-                   "• Accessibility — to send the paste\n"
-                   "• Input Monitoring — to read the hotkey\n\n"
+                   "• Microphone, so it can hear you\n"
+                   "• Accessibility, so it can send the paste\n"
+                   "• Input Monitoring, so it can read the hotkey\n\n"
                    "Add mr-whisper to each list, then quit and reopen the app.")
         elif sys.platform == "win32":
             txt = ("Windows:\n\n"
                    "• Allow Microphone access in Settings > Privacy > Microphone.\n"
-                   "That's it — the hotkey and paste work without extra setup.")
+                   "That's it. The hotkey and paste work without extra setup.")
         else:
             txt = ("Linux:\n\n"
                    "• Be in the 'input' group for the hotkey:\n"
@@ -167,8 +167,8 @@ class Wizard(QtWidgets.QWidget):
             '• "auto context, ..."  →  rewrites for the right tone\n'
             '• "auto adjust, ..."  →  cleans filler and fixes punctuation\n'
             '• "new dump, ..."  →  saves a note instead of pasting\n\n'
-            "You can change the hotkey and paste behavior anytime in Settings "
-            "(the 🎙️ tray menu). You're all set!")
+            "Change the hotkey and paste behavior anytime in Settings, "
+            "from the tray menu. That's the whole setup.")
         body.setWordWrap(True)
         body.setStyleSheet("font-size:14px; line-height:1.5;")
         v.addWidget(body)

@@ -87,7 +87,7 @@ class Pill(QtWidgets.QWidget):
 
     def show_transcribing(self) -> None:
         # inicia o encolhimento por TEMPO (curva ease-out), não por STT ter
-        # terminado — garante que a animação de virar círculo sempre apareça.
+        # terminado: garante que a animação de virar círculo sempre apareça.
         if self.mode != "transcribing":
             self._shrink_t = 0.0
         self.mode = "transcribing"

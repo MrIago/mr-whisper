@@ -3,24 +3,30 @@
 
 Reflete o estado com ícones ESTÁTICOS (um por estado), sem animar via setIcon.
 Motivo: o AppIndicator do GNOME (StatusNotifierItem) faz throttle/cache de ícone
-e engasga com updates rápidos, ficando preso num frame. A animação viva fica na
-pill (janela Qt própria); o tray só troca entre ícones fixos, que o indicador
-processa bem.
+e engasga com updates rápidos, ficando preso num frame. Toda a animação viva
+mora na pill (janela Qt própria, a bolinha flutuante); o tray fica sóbrio.
 
-Estados:
-- idle         → mic neutro/apagado
-- recording    → mic verde + ponto vermelho (REC)
-- transcribing → mic verde + ponto teal (processando)
-- paused       → mic neutro + risco vermelho
+Desenho: um microfone só, que muda de COR conforme o estado. Sem badge, sem
+bolinha, sem spinner (o "frufru" é a pill):
+
+- idle          → microfone muted (cinza)
+- recording     → microfone branco (falando)
+- transcribing  → microfone branco (segue branco enquanto processa)
+- paused        → microfone muted com um risco vermelho por cima
+
+No macOS a barra de menu recolore o ícone (template mask), então lá o mic
+aparece no tom do tema em vez do branco/cinza; a diferença idle vs. ativo some
+no Mac, mas a pill já sinaliza o estado com folga.
 """
 from __future__ import annotations
 
+import sys
+
 from PySide6 import QtCore, QtGui, QtWidgets
 
-GREEN = "#9acd32"
+WHITE = "#f2f2f5"
 MUTED = "#8a8a8a"
 RED = "#ff4444"
-TEAL = "#28e0c8"
 
 
 class TrayIcon(QtWidgets.QSystemTrayIcon):
@@ -50,10 +56,11 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
         p = QtGui.QPainter(pix)
         p.setRenderHint(QtGui.QPainter.Antialiasing)
 
+        # ativo (gravando ou transcrevendo) = branco; senão muted.
         active = state in ("recording", "transcribing")
-        color = QtGui.QColor(GREEN if active else MUTED)
+        color = QtGui.QColor(WHITE if active else MUTED)
 
-        # mic
+        # microfone
         p.setPen(QtCore.Qt.NoPen)
         p.setBrush(color)
         p.drawRoundedRect(24, 8, 16, 26, 8, 8)
@@ -63,15 +70,8 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
         p.drawArc(18, 18, 28, 28, 180 * 16, 180 * 16)
         p.drawLine(32, 46, 32, 54)
 
-        # badge por estado (ponto fixo, sem animação)
-        p.setPen(QtCore.Qt.NoPen)
-        if state == "recording":
-            p.setBrush(QtGui.QColor(RED))
-            p.drawEllipse(42, 4, 18, 18)
-        elif state == "transcribing":
-            p.setBrush(QtGui.QColor(TEAL))
-            p.drawEllipse(42, 4, 18, 18)
-        elif state == "paused":
+        # pausado: risco vermelho por cima (única exceção que usa outra cor)
+        if state == "paused":
             pen2 = QtGui.QPen(QtGui.QColor(RED), 5)
             pen2.setCapStyle(QtCore.Qt.RoundCap)
             p.setPen(pen2)
@@ -81,7 +81,6 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
         # No macOS a barra de menu espera um ícone "template" (mask), senão um
         # pixmap colorido pode não aparecer. Marcamos como mask; o macOS o
         # recolore pro tema (claro/escuro). Nos outros OS, ícone colorido normal.
-        import sys
         if sys.platform == "darwin":
             pix.setDevicePixelRatio(2.0)  # nítido na barra ~22px
             pix.setMask(pix.createMaskFromColor(QtCore.Qt.transparent,

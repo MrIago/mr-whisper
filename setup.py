@@ -115,7 +115,7 @@ def status() -> None:
     print(f"  STT provider (MRWHISPER_STT_PROVIDER): {config.get('MRWHISPER_STT_PROVIDER', '(auto)')}")
     print(f"  LLM backend  (MRWHISPER_TRANSLATE):    {config.get('MRWHISPER_TRANSLATE', '(auto)')}")
     for _, (key_name, *_rest) in PROVIDERS.items():
-        print(f"  {key_name}: {'✅' if config.get(key_name) else '⚪'}")
+        print(f"  {key_name}: {'✓ set' if config.get(key_name) else '· not set'}")
     print(f"  dump file (MRWHISPER_DUMP_FILE): {config.get('MRWHISPER_DUMP_FILE', '~/Documentos/Notas/dump.md')}")
 
 
