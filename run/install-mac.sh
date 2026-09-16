@@ -8,7 +8,7 @@ echo "▸ mr-whisper, instalação (macOS)"
 
 # 1. Homebrew (se faltar)
 if ! command -v brew >/dev/null 2>&1; then
-  echo "▸ instalando Homebrew…"
+  echo "▸ instalando Homebrew"
   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 fi
 
@@ -19,17 +19,17 @@ command -v git >/dev/null 2>&1 || brew install git
 # 3. baixar/atualizar o repo em ~/mr-whisper
 DIR="$HOME/mr-whisper"
 if [ -d "$DIR/.git" ]; then
-  echo "▸ atualizando $DIR…"; git -C "$DIR" pull --ff-only
+  echo "▸ atualizando $DIR"; git -C "$DIR" pull --ff-only
 else
-  echo "▸ clonando em $DIR…"; git clone https://github.com/MrIago/mr-whisper.git "$DIR"
+  echo "▸ clonando em $DIR"; git clone https://github.com/MrIago/mr-whisper.git "$DIR"
 fi
 
 # 4. dependências
-echo "▸ instalando dependências…"
+echo "▸ instalando dependencias"
 python3 -m pip install --user -q -r "$DIR/requirements.txt"
 
 # 5. rodar
-echo "▸ pronto. abrindo o app (ícone 🎙️ na barra de menu)…"
+echo "▸ pronto. abrindo o app (icone de microfone na barra de menu)"
 echo "  Se o macOS pedir permissões (Microfone, Acessibilidade, Input Monitoring),"
 echo "  libere em System Settings › Privacy & Security e rode de novo:"
 echo "    python3 $DIR/app.py"
