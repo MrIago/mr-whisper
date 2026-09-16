@@ -52,14 +52,15 @@ class Pill(QtWidgets.QWidget):
 
         self._timer = QtCore.QTimer(self)
         self._timer.timeout.connect(self._tick)
-        self._timer.setInterval(33)  # ~30 fps
+        self._timer.setInterval(16)  # ~60 fps (mais fluido)
 
-    SHRINK_FRAMES = 12  # ~0.4s pra virar círculo (curva ease-out aplicada)
+    SHRINK_FRAMES = 42  # ~0.7s pra virar círculo, curva ease-in-out aplicada
 
     @staticmethod
     def _ease_out(t: float) -> float:
-        # bézier de saída (aceleração decrescente): rápido no começo, freia no fim
-        return 1.0 - (1.0 - t) ** 3
+        # ease-in-out cúbico: começa devagar, acelera no meio, freia no fim.
+        # Mais suave que só o ease-out, é a curva "bonita" de transição.
+        return 4 * t * t * t if t < 0.5 else 1 - ((-2 * t + 2) ** 3) / 2
 
     # ── largura atual da pill (anima com `shrink`; no fim = altura → círculo) ──
     def _pill_w(self) -> float:
@@ -112,12 +113,14 @@ class Pill(QtWidgets.QWidget):
 
     # ── animação ───────────────────────────────────────────────────────────────
     def _tick(self) -> None:
-        self.phase += 0.35
+        # a 60fps os incrementos são ~metade dos de 30fps pra manter a mesma
+        # velocidade visual (spinner e waveform).
+        self.phase += 0.18
         # waveform (só no listening)
         for i in range(BARS):
             wobble = 0.5 + 0.5 * math.sin(self.phase + i * 0.6)
             target = 0.08 + self.level * (0.25 + 0.75 * wobble)
-            self.bars[i] += (target - self.bars[i]) * 0.4
+            self.bars[i] += (target - self.bars[i]) * 0.22
 
         # encolhimento: progresso por TEMPO + curva ease-out (bézier de saída).
         # avança quando transcrevendo/done; recua se voltar pro listening.
