@@ -200,7 +200,7 @@ class Pill(QtWidgets.QWidget):
         verde, com um pop de escala rápido pra dar o toque de sucesso."""
         pop = 1.0 + 0.15 * max(0.0, math.sin(min(1.0, (24 - self._done_frames) / 6) * math.pi))
         s = H * 0.18 * pop
-        pen = QtGui.QPen(GREEN, 2.4)
+        pen = QtGui.QPen(INK, 2.4)
         pen.setJoinStyle(QtCore.Qt.RoundJoin)
         p.setPen(pen)
         p.setBrush(QtCore.Qt.NoBrush)
@@ -216,7 +216,7 @@ class Pill(QtWidgets.QWidget):
         w = H * 0.30 * pop
         h = H * 0.40 * pop
         x, y = cx - w / 2, cy - h / 2
-        pen = QtGui.QPen(GREEN, 2.2)
+        pen = QtGui.QPen(INK, 2.2)
         pen.setJoinStyle(QtCore.Qt.RoundJoin)
         pen.setCapStyle(QtCore.Qt.RoundCap)
         p.setPen(pen)
