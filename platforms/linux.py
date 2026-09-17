@@ -139,8 +139,9 @@ class EvdevHotkey:
         mods, key = config.hotkey_combo()  # ex: ({"ctrl","alt"}, "space")
         # keycodes de cada modificador e da tecla-gatilho
         self._mod_codes = {m: _MOD_CODES.get(m, set()) for m in mods}
-        self._trigger = _KEY_CODES.get(key, ecodes.KEY_SPACE)
-        self._label = "+".join(sorted(mods)) + "+" + key
+        # key == "" → atalho só de modificadores (sem tecla-gatilho)
+        self._trigger = _KEY_CODES.get(key, ecodes.KEY_SPACE) if key else None
+        self._label = "+".join(sorted(mods)) + (f"+{key}" if key else "")
 
     def run(self) -> None:
         keyboards = _find_keyboards()
@@ -151,7 +152,8 @@ class EvdevHotkey:
                  f"{[k.name for k in keyboards]}")
 
         held = {m: False for m in self._mod_codes}
-        held["_key"] = False
+        # sem tecla-gatilho, ela conta como sempre segurada (só os modificadores)
+        held["_key"] = self._trigger is None
         active = False
 
         def update():
@@ -183,7 +185,7 @@ class EvdevHotkey:
                                 matched = True
                                 break
                         if not matched:
-                            if code == self._trigger:
+                            if self._trigger is not None and code == self._trigger:
                                 held["_key"] = pressed
                             elif code == CANCEL_KEY and event.value == 1:
                                 self.on_cancel()

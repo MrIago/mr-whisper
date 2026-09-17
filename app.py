@@ -310,9 +310,7 @@ def main() -> int:
     controller.sig_update.connect(offer_update)
 
     # dica de uso (hold-to-talk) sempre visível no topo, com o atalho real
-    _mods, _key = config.hotkey_combo()
-    _combo = " + ".join([m.capitalize() for m in sorted(_mods)] + [_key.capitalize()])
-    hint = menu.addAction(f"Hold {_combo} to dictate")
+    hint = menu.addAction(f"Hold {config.hotkey_label()} to dictate")
     hint.setEnabled(False)
 
     # histórico das últimas transcrições, clicar recopia pro clipboard

@@ -113,9 +113,12 @@ class PynputHotkey:
         self.on_release = on_release
         self.on_cancel = on_cancel
         from core import config
-        self.mods, self.key = config.hotkey_combo()  # ex: ({"alt"}, "space")
+        # ex: ({"alt"}, "space"), ou ({"ctrl","alt"}, "") quando é só modificador
+        self.mods, self.key = config.hotkey_combo()
         self.held = {m: False for m in self.mods}
-        self.held["_key"] = False
+        # atalho só de modificadores: não há tecla-gatilho, ela conta como "sempre
+        # segurada" e o combo depende apenas dos modificadores.
+        self.held["_key"] = not self.key
         self.active = False
 
     def _update(self):
@@ -152,6 +155,8 @@ class PynputHotkey:
             return None
 
         def is_trigger(k):
+            if not self.key:  # atalho só de modificadores: não existe gatilho
+                return False
             if trigger is not None:
                 return k == trigger
             # letra/número/símbolo. O .char muda com o modificador segurado
@@ -185,12 +190,85 @@ class PynputHotkey:
                 return
             self._update()
 
-        _log(f"escutando teclado (pynput), {'+'.join(sorted(self.mods))}+{self.key}")
-        with kb.Listener(on_press=on_press, on_release=on_release) as listener:
+        label = "+".join(sorted(self.mods)) + (f"+{self.key}" if self.key else "")
+        _log(f"escutando teclado (pynput), {label}")
+        extra = {}
+        swallow = _mac_swallow_trigger(self) if self.key else None
+        if swallow is not None:
+            # macOS: o listener só ESCUTA, então a tecla do atalho também chegava
+            # no app em foco e, segurada, repetia (Option+Espaço enchia o texto
+            # de espaços). Com o intercept a tecla-gatilho é consumida enquanto
+            # os modificadores do atalho estão segurados.
+            extra["darwin_intercept"] = swallow
+        with kb.Listener(on_press=on_press, on_release=on_release, **extra) as listener:
             listener.join()
 
 
-# ── paste (pyperclip + pynput controller) ─────────────────────────────────────
+# keycodes físicos do macOS pras teclas especiais (as demais vêm de _MAC_VK)
+_MAC_SPECIAL_VK = {"space": 49, "enter": 36, "tab": 48, "backspace": 51,
+                   "f1": 122, "f2": 120, "f3": 99, "f4": 118, "f5": 96, "f6": 97,
+                   "f7": 98, "f8": 100, "f9": 101, "f10": 109, "f11": 103,
+                   "f12": 111}
+
+
+def _mac_swallow_trigger(hotkey: "PynputHotkey"):
+    """Devolve o callback `darwin_intercept` do pynput que CONSOME a tecla-gatilho
+    enquanto os modificadores do atalho estão segurados (o pynput ainda chama
+    on_press/on_release antes; só o app em foco deixa de receber a tecla). None
+    fora do macOS ou se o Quartz não estiver disponível."""
+    import sys
+    if sys.platform != "darwin":
+        return None
+    vk = _MAC_SPECIAL_VK.get(hotkey.key, _MAC_VK.get(hotkey.key))
+    if vk is None:
+        return None
+    try:
+        import Quartz
+    except Exception:
+        return None
+    key_events = (Quartz.kCGEventKeyDown, Quartz.kCGEventKeyUp)
+
+    def intercept(event_type, event):
+        try:
+            if event_type in key_events and all(hotkey.held[m] for m in hotkey.mods):
+                code = Quartz.CGEventGetIntegerValueField(
+                    event, Quartz.kCGKeyboardEventKeycode)
+                if code == vk:
+                    return None  # consome: o app em foco não recebe a tecla
+        except Exception:
+            pass
+        return event
+
+    return intercept
+
+
+# ── paste (pyperclip + tecla de colar) ────────────────────────────────────────
+def _mac_paste(use_shift: bool = False) -> bool:
+    """Cmd+V (ou Cmd+Shift+V) no macOS via eventos Quartz por keycode. Retorna
+    True se postou o atalho, False se não deu (o texto já está no clipboard)."""
+    try:
+        import Quartz
+    except Exception as exc:
+        _log(f"paste: Quartz indisponível ({exc}); texto ficou no clipboard")
+        return False
+    try:
+        v_key = 9  # kVK_ANSI_V
+        flags = Quartz.kCGEventFlagMaskCommand
+        if use_shift:
+            flags |= Quartz.kCGEventFlagMaskShift
+        src = Quartz.CGEventSourceCreate(Quartz.kCGEventSourceStateHIDSystemState)
+        for is_down in (True, False):
+            ev = Quartz.CGEventCreateKeyboardEvent(src, v_key, is_down)
+            # flags explícitas: ignora modificadores que o usuário ainda esteja
+            # segurando do atalho (senão viraria Ctrl+Option+Cmd+V).
+            Quartz.CGEventSetFlags(ev, flags)
+            Quartz.CGEventPost(Quartz.kCGHIDEventTap, ev)
+        return True
+    except Exception as exc:
+        _log(f"paste falhou ({exc}); texto ficou no clipboard")
+        return False
+
+
 class ClipboardDelivery:
     """Copia pro clipboard (pyperclip) e cola com o atalho do SO via pynput.
     `paste_key` = 'cmd' (macOS) ou 'ctrl' (Windows)."""
@@ -203,16 +281,26 @@ class ClipboardDelivery:
         "ctrl+shift+v") permite forçar Shift; senão usa o modificador padrão do
         SO (Cmd no macOS, Ctrl no Windows). `paste=False` → só copia.
         Retorna True se colou, False se só copiou."""
+        import sys
         import pyperclip
-        from pynput import keyboard as kb
 
         pyperclip.copy(text)
         if not paste:
             return False
         time.sleep(0.12)
+        use_shift = "shift" in (shortcut or "").lower()
+        if sys.platform == "darwin":
+            # NÃO usar pynput.Controller no macOS: ao ser criado ele consulta o
+            # layout do teclado (TSMGetInputSourceProperty), API que só pode rodar
+            # na thread principal. Esta função roda na thread de processamento, e
+            # no macOS 14/15 isso derruba o app com SIGTRAP logo após transcrever
+            # (crash nativo, try/except não segura). Eventos Quartz por keycode
+            # não tocam nessa API e podem ser postados de qualquer thread.
+            return _mac_paste(use_shift)
+
+        from pynput import keyboard as kb
         ctrl = kb.Controller()
         mod = kb.Key.cmd if self.paste_modifier == "cmd" else kb.Key.ctrl
-        use_shift = "shift" in (shortcut or "").lower()
         mods = [mod] + ([kb.Key.shift] if use_shift else [])
         # try/finally: se algo falhar no meio, os modificadores NUNCA ficam
         # grudados no SO (Cmd/Ctrl preso trava o teclado do usuário).

@@ -174,11 +174,13 @@ class _HotkeyCapture(QtWidgets.QWidget):
         changed = cur != self._saved
         for b in self._btns_row:
             b.setVisible(changed)
-        # valida pro Save: >=1 modificador + exatamente 1 tecla comum.
+        # valida pro Save: (>=1 modificador + 1 tecla) OU (>=2 modificadores,
+        # sem tecla). Mesma regra de core.config.hotkey_combo.
         _MODS = {"ctrl", "alt", "shift", "cmd", "super"}
         mods = {v for v in self._order if v in _MODS}
         keys = [v for v in self._order if v not in _MODS]
-        self.save_btn.setEnabled(bool(mods) and len(keys) == 1)
+        self.save_btn.setEnabled((bool(mods) and len(keys) == 1)
+                                 or (len(mods) >= 2 and not keys))
 
     def _label_for(self, combo: str) -> str:
         names = _mod_names()
@@ -400,9 +402,10 @@ class SettingsWindow(QtWidgets.QWidget):
         self.hotkey.captured.connect(self._save_hotkey)
         layout.addWidget(self.hotkey)
 
-        hint = QtWidgets.QLabel("Click the keys in order to build the shortcut "
-                                "(at least one of Ctrl/Alt/Shift/Cmd plus one key), "
-                                "then Save. Hold it to speak, release to paste. "
+        hint = QtWidgets.QLabel("Click the keys in order to build the shortcut, "
+                                "then Save. Use one modifier plus a key, or two "
+                                "modifiers alone (nothing gets typed while you "
+                                "hold them). Hold it to speak, release to paste. "
                                 "A new hotkey takes effect after you quit and reopen.")
         hint.setWordWrap(True)
         hint.setStyleSheet("color:#888;")
@@ -428,8 +431,7 @@ class SettingsWindow(QtWidgets.QWidget):
         sc = config.get("MRWHISPER_PASTE_SHORTCUT", "ctrl+v") or "ctrl+v"
         self.paste_shortcut.setCurrentIndex(max(0, self.paste_shortcut.findData(sc)))
         # hotkey (default por OS): mostra o combo salvo no capturador
-        import sys as _sys
-        hk_default = "alt+space" if _sys.platform == "darwin" else "ctrl+alt+space"
+        hk_default = config.default_hotkey()
         hk = (config.get("MRWHISPER_HOTKEY", hk_default) or hk_default).lower()
         self.hotkey.set_combo(hk)
         self._loading = False

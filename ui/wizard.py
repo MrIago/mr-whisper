@@ -79,7 +79,7 @@ class Wizard(QtWidgets.QWidget):
                          "and your words are typed where your cursor is.")
         body = QtWidgets.QLabel(
             "The whole app is one gesture:\n\n"
-            "Hold the hotkey (Ctrl+Alt+Space, or Option+Space on Mac).\n"
+            f"Hold the hotkey ({config.hotkey_label()}).\n"
             "Speak while you hold it.\n"
             "Release, and the text lands where your cursor is.\n\n"
             "It lives in the tray. This short setup gets you there.")

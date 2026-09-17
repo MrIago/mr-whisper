@@ -78,7 +78,7 @@ Linux extras: `sudo apt install xdotool xclip` and be in the `input` group.
 Autostart helpers live in `run/` (systemd `--user` on Linux, a LaunchAgent
 plist on macOS, a PowerShell/Task-Scheduler note on Windows).
 
-**Usage:** hold `Ctrl+Alt+Space`, speak, release. `ESC` cancels mid-transcription.
+**Usage:** hold `Ctrl+Alt+Space` (on macOS: `Control+Option`, modifiers only, so nothing gets typed while you hold), speak, release. `ESC` cancels mid-transcription. Change the hotkey in Settings.
 
 ## Voice features
 

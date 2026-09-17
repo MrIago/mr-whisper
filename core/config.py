@@ -21,10 +21,11 @@ Chaves/prefs conhecidas:
 - MRWHISPER_PASTE_SHORTCUT, atalho de colar: "ctrl+v" (default) | "ctrl+shift+v"
 - MRWHISPER_AUTO_PASTE  , colar automático após transcrever: "1" (default) | "0"
                           (se "0", só copia pro clipboard, você cola manualmente)
-- MRWHISPER_HOTKEY      , atalho hold-to-talk (ex: "ctrl+alt+space", "alt+space",
-                          "ctrl+shift+space"). Default: Linux/Windows =
-                          "ctrl+alt+space"; macOS = "alt+space" (Option+Espaço,
-                          livre no Mac; Ctrl+Espaço conflita com troca de teclado).
+- MRWHISPER_HOTKEY      , atalho hold-to-talk (ex: "ctrl+alt+space", "alt+r", ou só
+                          modificadores, mínimo 2: "ctrl+alt"). Default:
+                          Linux/Windows = "ctrl+alt+space"; macOS = "ctrl+alt"
+                          (Control+Option, sem tecla: não digita nada enquanto
+                          segura e não conflita com Spotlight/Raycast/ChatGPT).
 """
 from __future__ import annotations
 
@@ -60,12 +61,20 @@ def get(name: str, default: str | None = None) -> str | None:
     return v.strip() if v and v.strip() else default
 
 
+def default_hotkey() -> str:
+    """Atalho padrão por OS. No macOS é SÓ modificadores (Control+Option): segurar
+    uma tecla comum digita ela sem parar no app em foco (Option+Espaço enchia o
+    texto de espaços) e Option+Espaço ainda conflita com Raycast/ChatGPT/Claude.
+    Modificador sozinho não digita nada. Nos demais, Ctrl+Alt+Espaço."""
+    import sys
+    return "ctrl+alt" if sys.platform == "darwin" else "ctrl+alt+space"
+
+
 def hotkey_combo() -> tuple[set[str], str]:
     """Atalho hold-to-talk parseado: (set de modificadores, tecla). Ex:
-    ({"ctrl","alt"}, "space"). Default por OS: macOS usa "alt+space" (Ctrl+Espaço
-    conflita com a troca de teclado do Mac); os demais usam "ctrl+alt+space"."""
-    import sys
-    default = "alt+space" if sys.platform == "darwin" else "ctrl+alt+space"
+    ({"ctrl","alt"}, "space"). A tecla pode ser "" quando o atalho é só de
+    modificadores (mínimo 2, ex: ctrl+alt). Default: ver default_hotkey()."""
+    default = default_hotkey()
     raw = (get("MRWHISPER_HOTKEY", default) or default).lower()
     parts = [p.strip() for p in raw.replace(" ", "").split("+") if p.strip()]
     _MODS = ("ctrl", "alt", "shift", "cmd", "super")
@@ -73,11 +82,36 @@ def hotkey_combo() -> tuple[set[str], str]:
     # ex: "ctrl+space+alt"): modificador é o que está em _MODS, tecla é o resto.
     mods = {p for p in parts if p in _MODS}
     keys = [p for p in parts if p not in _MODS]
-    # sem modificador (perigoso) ou sem exatamente uma tecla: volta pro default
-    if not mods or len(keys) != 1:
-        parts = default.split("+")
-        return set(parts[:-1]), parts[-1]
-    return mods, keys[0]
+    # válido: (>=1 modificador + 1 tecla) OU (>=2 modificadores, sem tecla).
+    if mods and len(keys) == 1:
+        return mods, keys[0]
+    if len(mods) >= 2 and not keys:
+        return mods, ""
+    # inválido (sem modificador, 2 teclas, 1 modificador sozinho): volta pro default
+    dparts = default.split("+")
+    dmods = {p for p in dparts if p in _MODS}
+    dkeys = [p for p in dparts if p not in _MODS]
+    return dmods, (dkeys[0] if dkeys else "")
+
+
+def hotkey_label() -> str:
+    """Atalho atual em texto amigável, com os nomes de tecla do OS: no macOS
+    "Control + Option", no Windows "Ctrl + Alt + Space" etc."""
+    import sys
+    if sys.platform == "darwin":
+        names = {"ctrl": "Control", "alt": "Option", "shift": "Shift",
+                 "cmd": "Command", "super": "Command"}
+    elif sys.platform == "win32":
+        names = {"ctrl": "Ctrl", "alt": "Alt", "shift": "Shift",
+                 "cmd": "Win", "super": "Win"}
+    else:
+        names = {"ctrl": "Ctrl", "alt": "Alt", "shift": "Shift",
+                 "cmd": "Super", "super": "Super"}
+    mods, key = hotkey_combo()
+    parts = [names[m] for m in ("ctrl", "alt", "shift", "cmd", "super") if m in mods]
+    if key:
+        parts.append(key.upper() if len(key) == 1 else key.capitalize())
+    return " + ".join(dict.fromkeys(parts))
 
 
 def set_values(pairs: dict[str, str]) -> None:
