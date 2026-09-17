@@ -113,7 +113,21 @@ _MOD_CODES = {
     "super": {ecodes.KEY_LEFTMETA, ecodes.KEY_RIGHTMETA},
     "cmd": {ecodes.KEY_LEFTMETA, ecodes.KEY_RIGHTMETA},
 }
-_KEY_CODES = {"space": ecodes.KEY_SPACE, "enter": ecodes.KEY_ENTER, "tab": ecodes.KEY_TAB}
+# tecla-gatilho: tudo que o Settings oferece nas pills (letras, números, F1-F12,
+# símbolos). evdev lê a tecla FÍSICA, então não depende de layout nem de Shift.
+_KEY_CODES = {
+    "space": ecodes.KEY_SPACE, "enter": ecodes.KEY_ENTER, "tab": ecodes.KEY_TAB,
+    "backspace": ecodes.KEY_BACKSPACE,
+    ",": ecodes.KEY_COMMA, ".": ecodes.KEY_DOT, "/": ecodes.KEY_SLASH,
+    ";": ecodes.KEY_SEMICOLON, "'": ecodes.KEY_APOSTROPHE,
+    "[": ecodes.KEY_LEFTBRACE, "]": ecodes.KEY_RIGHTBRACE,
+    "\\": ecodes.KEY_BACKSLASH, "-": ecodes.KEY_MINUS, "=": ecodes.KEY_EQUAL,
+    "`": ecodes.KEY_GRAVE,
+}
+_KEY_CODES.update({c: getattr(ecodes, f"KEY_{c.upper()}")
+                   for c in "abcdefghijklmnopqrstuvwxyz"})
+_KEY_CODES.update({d: getattr(ecodes, f"KEY_{d}") for d in "0123456789"})
+_KEY_CODES.update({f"f{i}": getattr(ecodes, f"KEY_F{i}") for i in range(1, 13)})
 
 
 class EvdevHotkey:

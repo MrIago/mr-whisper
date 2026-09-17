@@ -26,7 +26,8 @@ from . import cloud, dump
 _TRANSLATE = re.compile(
     r"""auto[\s\-]*translate
         [\s,:;.]+
-        (?:(?:to|para|pra)\s+)?
+        (?:(?:to|into|in|para|pra|pro|pros|do|da|dos|das|em|en|al|a)\s+)?
+        (?:(?:o|a|os|as|the|el|la)\s+)?
         (?P<lang>[^\s,.:;!?]+)
         [\s,.:;!?]+
         (?P<rest>.+)$

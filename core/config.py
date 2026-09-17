@@ -68,15 +68,16 @@ def hotkey_combo() -> tuple[set[str], str]:
     default = "alt+space" if sys.platform == "darwin" else "ctrl+alt+space"
     raw = (get("MRWHISPER_HOTKEY", default) or default).lower()
     parts = [p.strip() for p in raw.replace(" ", "").split("+") if p.strip()]
-    if not parts:
+    _MODS = ("ctrl", "alt", "shift", "cmd", "super")
+    # a tecla pode estar em qualquer posição (as pills salvam na ordem do clique,
+    # ex: "ctrl+space+alt"): modificador é o que está em _MODS, tecla é o resto.
+    mods = {p for p in parts if p in _MODS}
+    keys = [p for p in parts if p not in _MODS]
+    # sem modificador (perigoso) ou sem exatamente uma tecla: volta pro default
+    if not mods or len(keys) != 1:
         parts = default.split("+")
-    key = parts[-1]
-    mods = {m for m in parts[:-1] if m in ("ctrl", "alt", "shift", "cmd", "super")}
-    if not mods:  # atalho sem modificador é perigoso; volta pro default
-        parts = default.split("+")
-        key = parts[-1]
-        mods = set(parts[:-1])
-    return mods, key
+        return set(parts[:-1]), parts[-1]
+    return mods, keys[0]
 
 
 def set_values(pairs: dict[str, str]) -> None:

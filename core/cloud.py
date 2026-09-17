@@ -270,10 +270,12 @@ def _llm_transform(system: str, user: str) -> str:
     """Roteia um par (system, user) pro LLM de texto (Groq ou OpenRouter),
     conforme MRWHISPER_TRANSLATE. Compartilhado por translate/context/adjust."""
     backend = (get("MRWHISPER_TRANSLATE", "groq") or "groq").lower()
+    # se pediram openrouter mas não há chave, cai pro Groq em vez de quebrar
+    # (protege config antiga com MRWHISPER_TRANSLATE=openrouter sem OPENROUTER_KEY).
+    if backend == "openrouter" and not get("OPENROUTER_KEY"):
+        backend = "groq"
     if backend == "openrouter":
         key = get("OPENROUTER_KEY")
-        if not key:
-            raise RuntimeError("MRWHISPER_TRANSLATE=openrouter mas falta OPENROUTER_KEY")
         return _chat(
             OPENROUTER_CHAT_ENDPOINT, key, OPENROUTER_LLM_MODEL, system, user,
             extra_headers={"HTTP-Referer": "https://github.com/MrIago/mr-whisper",

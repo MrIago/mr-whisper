@@ -25,8 +25,7 @@ class Wizard(QtWidgets.QWidget):
         self.setFixedSize(560, 520)
         self.setWindowFlags(QtCore.Qt.Window | QtCore.Qt.WindowStaysOnTopHint)
         self._validated.connect(self._on_validated)
-        self._key_ok = bool(config.get("GROQ_API_KEY") or config.get("OPENAI_API_KEY")
-                            or config.get("OPENROUTER_KEY"))
+        self._key_ok = bool(config.get("GROQ_API_KEY"))
         self._build()
 
     # ── layout ────────────────────────────────────────────────────────────────
@@ -93,20 +92,9 @@ class Wizard(QtWidgets.QWidget):
 
     def _page_key(self) -> QtWidgets.QWidget:
         page = QtWidgets.QWidget()
-        v = self._header("Add a transcription key",
-                         "mr-whisper transcribes in the cloud. Groq has a generous "
-                         "free tier and is the easiest to start with.")
-        # provider (Groq default; avançado esconde os outros)
-        prow = QtWidgets.QHBoxLayout()
-        prow.addWidget(QtWidgets.QLabel("Provider:"))
-        self.provider = QtWidgets.QComboBox()
-        self.provider.addItem("Groq  ·  free tier, recommended", "groq")
-        self.provider.addItem("OpenAI  ·  paid", "openai")
-        self.provider.addItem("OpenRouter  ·  pay-per-use", "openrouter")
-        self.provider.currentIndexChanged.connect(self._on_provider)
-        prow.addWidget(self.provider, 1)
-        v.addLayout(prow)
-
+        v = self._header("Add your Groq key",
+                         "mr-whisper transcribes in the cloud with Groq, which has a "
+                         "generous free tier. One key is all you need.")
         self.get_link = QtWidgets.QLabel()
         self.get_link.setOpenExternalLinks(True)
         self.get_link.setStyleSheet("color:#4a9;")
@@ -122,11 +110,15 @@ class Wizard(QtWidgets.QWidget):
         krow.addWidget(self.validate_btn)
         v.addLayout(krow)
 
-        self.key_status = QtWidgets.QLabel("✓ a key is already set" if self._key_ok else "")
+        self.key_status = QtWidgets.QLabel("a key is already set" if self._key_ok else "")
         self.key_status.setStyleSheet("color:#4a9;" if self._key_ok else "color:#888;")
         v.addWidget(self.key_status)
         v.addStretch(1)
-        self._on_provider()
+        # Groq fixo: mostra o link e pré-preenche a chave se já houver.
+        self.get_link.setText('Get a free key: '
+                              '<a href="https://console.groq.com/keys">'
+                              'https://console.groq.com/keys</a>')
+        self.key_edit.setText(config.get("GROQ_API_KEY") or "")
         w = QtWidgets.QWidget(); w.setLayout(v)
         return w
 
@@ -201,21 +193,7 @@ class Wizard(QtWidgets.QWidget):
             return
         self.stack.setCurrentIndex(i + 1)
 
-    # ── validação da chave ──────────────────────────────────────────────────────
-    def _providers(self):
-        return {
-            "groq": ("GROQ_API_KEY", "https://console.groq.com/keys", cloud.validate_groq),
-            "openai": ("OPENAI_API_KEY", "https://platform.openai.com/api-keys", cloud.validate_openai),
-            "openrouter": ("OPENROUTER_KEY", "https://openrouter.ai/keys", cloud.validate_openrouter),
-        }
-
-    def _on_provider(self) -> None:
-        pid = self.provider.currentData()
-        _key, url, _v = self._providers()[pid]
-        self.get_link.setText(f'Get a free key: <a href="{url}">{url}</a>')
-        existing = config.get(self._providers()[pid][0])
-        self.key_edit.setText(existing or "")
-
+    # ── validação da chave (só Groq) ────────────────────────────────────────────
     def _validate(self) -> None:
         key = self.key_edit.text().strip()
         if not key:
@@ -223,27 +201,24 @@ class Wizard(QtWidgets.QWidget):
             self.key_status.setStyleSheet("color:#d66;")
             return
         self.validate_btn.setEnabled(False)
-        self.key_status.setText("validating…")
+        self.key_status.setText("validating")
         self.key_status.setStyleSheet("color:#888;")
-        pid = self.provider.currentData()
-        validate = self._providers()[pid][2]
 
         def work():
-            ok, why = validate(key)
+            ok, why = cloud.validate_groq(key)
             self._validated.emit(ok, why)
         threading.Thread(target=work, daemon=True).start()
 
     @QtCore.Slot(bool, str)
     def _on_validated(self, ok: bool, why: str) -> None:
         self.validate_btn.setEnabled(True)
-        pid = self.provider.currentData()
-        key_name = self._providers()[pid][0]
         if ok:
-            config.set_values({key_name: self.key_edit.text().strip(),
-                               "MRWHISPER_STT_PROVIDER": pid})
+            config.set_values({"GROQ_API_KEY": self.key_edit.text().strip(),
+                               "MRWHISPER_STT_PROVIDER": "groq",
+                               "MRWHISPER_TRANSLATE": "groq"})
             self._key_ok = True
-            self.key_status.setText("✓ valid and saved")
+            self.key_status.setText("valid and saved")
             self.key_status.setStyleSheet("color:#4a9;")
         else:
-            self.key_status.setText(f"✗ {why}")
+            self.key_status.setText(why)
             self.key_status.setStyleSheet("color:#d66;")

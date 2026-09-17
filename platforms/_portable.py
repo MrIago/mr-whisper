@@ -78,6 +78,32 @@ class SounddeviceRecorder:
 
 
 # ── teclado (pynput) ──────────────────────────────────────────────────────────
+# Códigos físicos (virtual keycodes) por SO, pra reconhecer a tecla-gatilho mesmo
+# com modificador segurado. macOS: kVK_ANSI_* (layout ANSI). Windows: VK_*.
+_MAC_VK = {
+    "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8,
+    "v": 9, "b": 11, "q": 12, "w": 13, "e": 14, "r": 15, "y": 16, "t": 17,
+    "1": 18, "2": 19, "3": 20, "4": 21, "6": 22, "5": 23, "=": 24, "9": 25,
+    "7": 26, "-": 27, "8": 28, "0": 29, "]": 30, "o": 31, "u": 32, "[": 33,
+    "i": 34, "p": 35, "l": 37, "j": 38, "'": 39, "k": 40, ";": 41, "\\": 42,
+    ",": 43, "/": 44, "n": 45, "m": 46, ".": 47, "`": 50,
+}
+_WIN_VK = {",": 0xBC, ".": 0xBE, "/": 0xBF, ";": 0xBA, "'": 0xDE, "[": 0xDB,
+           "]": 0xDD, "\\": 0xDC, "-": 0xBD, "=": 0xBB, "`": 0xC0}
+
+
+def _vk_for(key: str) -> int | None:
+    """Código físico da tecla `key` neste SO, ou None se não mapeada."""
+    import sys
+    if sys.platform == "darwin":
+        return _MAC_VK.get(key)
+    if sys.platform == "win32":
+        if len(key) == 1 and key.isalnum():
+            return ord(key.upper())  # VK de letra/dígito = ASCII maiúsculo
+        return _WIN_VK.get(key)
+    return None
+
+
 class PynputHotkey:
     """Hold-to-talk via pynput com atalho CONFIGURÁVEL (core.config.hotkey_combo).
     Segura os modificadores + tecla → press; solta → release; Esc cancela."""
@@ -113,8 +139,11 @@ class PynputHotkey:
                     getattr(kb.Key, "cmd_r", kb.Key.cmd)},
             "super": {kb.Key.cmd},
         }
-        key_map = {"space": kb.Key.space, "enter": kb.Key.enter, "tab": kb.Key.tab}
-        trigger = key_map.get(self.key)  # None se for uma letra comum
+        key_map = {"space": kb.Key.space, "enter": kb.Key.enter, "tab": kb.Key.tab,
+                   "backspace": kb.Key.backspace}
+        key_map.update({f"f{i}": getattr(kb.Key, f"f{i}") for i in range(1, 13)})
+        trigger = key_map.get(self.key)  # None se for letra/número/símbolo
+        trigger_vk = _vk_for(self.key)   # código físico da tecla neste SO
 
         def which_mod(k):
             for name in self.mods:
@@ -125,8 +154,13 @@ class PynputHotkey:
         def is_trigger(k):
             if trigger is not None:
                 return k == trigger
-            # tecla comum (letra): pynput entrega KeyCode com .char
-            return getattr(k, "char", None) == self.key
+            # letra/número/símbolo. O .char muda com o modificador segurado
+            # (Option+r vira "®" no Mac, Ctrl+r vira caractere de controle no
+            # Windows), então comparamos também o código FÍSICO da tecla (vk).
+            if trigger_vk is not None and getattr(k, "vk", None) == trigger_vk:
+                return True
+            ch = getattr(k, "char", None)
+            return bool(ch) and ch.lower() == self.key
 
         def on_press(k):
             if k == kb.Key.esc:
