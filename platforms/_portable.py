@@ -140,7 +140,10 @@ class PynputHotkey:
             "shift": {kb.Key.shift, kb.Key.shift_l, kb.Key.shift_r},
             "cmd": {kb.Key.cmd, getattr(kb.Key, "cmd_l", kb.Key.cmd),
                     getattr(kb.Key, "cmd_r", kb.Key.cmd)},
-            "super": {kb.Key.cmd},
+            # "super" = tecla Windows/Super. Inclui a da direita (cmd_r), que no
+            # Windows é uma tecla separada da esquerda.
+            "super": {kb.Key.cmd, getattr(kb.Key, "cmd_l", kb.Key.cmd),
+                      getattr(kb.Key, "cmd_r", kb.Key.cmd)},
         }
         key_map = {"space": kb.Key.space, "enter": kb.Key.enter, "tab": kb.Key.tab,
                    "backspace": kb.Key.backspace}
@@ -200,7 +203,14 @@ class PynputHotkey:
             # de espaços). Com o intercept a tecla-gatilho é consumida enquanto
             # os modificadores do atalho estão segurados.
             extra["darwin_intercept"] = swallow
+        # Windows: mesmo problema (Ctrl+Alt = AltGr, e AltGr+Espaço digita espaço
+        # em vários layouts, inclusive ABNT2). O filtro consome a tecla-gatilho.
+        holder: list = []
+        win_filter = _win_swallow_trigger(self, holder) if self.key else None
+        if win_filter is not None:
+            extra["win32_event_filter"] = win_filter
         with kb.Listener(on_press=on_press, on_release=on_release, **extra) as listener:
+            holder.append(listener)
             listener.join()
 
 
@@ -209,6 +219,51 @@ _MAC_SPECIAL_VK = {"space": 49, "enter": 36, "tab": 48, "backspace": 51,
                    "f1": 122, "f2": 120, "f3": 99, "f4": 118, "f5": 96, "f6": 97,
                    "f7": 98, "f8": 100, "f9": 101, "f10": 109, "f11": 103,
                    "f12": 111}
+
+
+# virtual-key codes do Windows pras teclas especiais (as demais vêm de _vk_for)
+_WIN_SPECIAL_VK = {"space": 0x20, "enter": 0x0D, "tab": 0x09, "backspace": 0x08}
+_WIN_SPECIAL_VK.update({f"f{i}": 0x6F + i for i in range(1, 13)})  # F1=0x70
+
+
+def _win_swallow_trigger(hotkey: "PynputHotkey", holder: list):
+    """Devolve o `win32_event_filter` do pynput que CONSOME a tecla-gatilho
+    enquanto os modificadores do atalho estão segurados. No Windows, suprimir um
+    evento impede também o on_press/on_release do pynput pra ele, então o próprio
+    filtro atualiza o estado da tecla antes de suprimir. `holder` recebe o
+    listener depois de criado (o suppress_event é um método dele). None fora do
+    Windows."""
+    import sys
+    if sys.platform != "win32":
+        return None
+    vk = _WIN_SPECIAL_VK.get(hotkey.key, _vk_for(hotkey.key))
+    if vk is None:
+        return None
+    key_down = (0x0100, 0x0104)  # WM_KEYDOWN, WM_SYSKEYDOWN (com Alt segurado)
+    key_up = (0x0101, 0x0105)    # WM_KEYUP, WM_SYSKEYUP
+
+    def event_filter(msg, data):
+        swallow = False
+        try:
+            if getattr(data, "vkCode", None) == vk:
+                mods_held = all(hotkey.held[m] for m in hotkey.mods)
+                if msg in key_down and mods_held:
+                    hotkey.held["_key"] = True
+                    hotkey._update()
+                    swallow = True
+                elif msg in key_up and hotkey.held["_key"] and hotkey.active:
+                    hotkey.held["_key"] = False
+                    hotkey._update()
+                    swallow = True
+        except Exception:
+            swallow = False
+        if swallow and holder:
+            # levanta a exceção interna do pynput que bloqueia o evento no SO;
+            # por isso fica FORA do try acima.
+            holder[0].suppress_event()
+        return True
+
+    return event_filter
 
 
 def _mac_swallow_trigger(hotkey: "PynputHotkey"):
