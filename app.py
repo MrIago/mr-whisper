@@ -158,6 +158,21 @@ class Controller(QtCore.QObject):
         self.sig_hide.emit()
         self._refresh_tray()
 
+    def _restore_focus(self) -> None:
+        """macOS: antes de colar, garante que o app onde o usuário estava
+        digitando é o ativo (a pill o guardou ao começar a gravar). A checagem
+        roda na thread da UI; aqui só esperamos e damos um respiro pro macOS
+        concluir a troca de app antes do Cmd+V. No-op nos outros OS."""
+        if sys.platform != "darwin":
+            return
+        try:
+            QtCore.QMetaObject.invokeMethod(
+                self.pill, "restore_focus", QtCore.Qt.BlockingQueuedConnection)
+            if self.pill.focus_restored:
+                time.sleep(0.2)
+        except Exception as exc:
+            print(f"restore_focus falhou: {exc}", flush=True)
+
     def _process(self, wav: str) -> None:
         self._refresh_tray()
         try:
@@ -192,6 +207,7 @@ class Controller(QtCore.QObject):
                     return
             auto = (config.get("MRWHISPER_AUTO_PASTE", "1") or "1") != "0"
             shortcut = config.get("MRWHISPER_PASTE_SHORTCUT", "ctrl+v") or "ctrl+v"
+            self._restore_focus()
             pasted = self.delivery.deliver(text, paste=auto, shortcut=shortcut)
             print(f"entregue ({len(text)} chars, paste={auto}→{pasted}, {shortcut})", flush=True)
             with self.lock:
@@ -267,6 +283,17 @@ def main() -> int:
 
     app = QtWidgets.QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
+
+    # macOS: roda como app "acessório" (sem ícone no Dock nem barra de menu
+    # própria), igual ao .app empacotado (LSUIElement). Rodando via python3 o
+    # padrão é app comum, que ganha o foco ao mostrar janelas e tirava o foco do
+    # campo onde o texto ia ser colado.
+    if sys.platform == "darwin":
+        try:
+            from AppKit import NSApplication
+            NSApplication.sharedApplication().setActivationPolicy_(1)  # Accessory
+        except Exception:
+            pass
 
     platform = base.get_platform()
     pill = Pill()

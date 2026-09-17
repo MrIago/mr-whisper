@@ -14,6 +14,7 @@ círculo sem trocar de widget.
 from __future__ import annotations
 
 import math
+import os
 import sys
 import time
 
@@ -38,6 +39,9 @@ class Pill(QtWidgets.QWidget):
         )
         self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
         self.setAttribute(QtCore.Qt.WA_ShowWithoutActivating)
+        # macOS esconde janelas Tool quando o app não é o ativo; como a pill
+        # aparece justamente com OUTRO app em foco, ela precisa ficar visível.
+        self.setAttribute(QtCore.Qt.WA_MacAlwaysShowToolWindow)
         # a janela é sempre do tamanho MÁXIMO (largura cheia); a pill é desenhada
         # centralizada dentro dela e encolhe por animação (sem mover a janela).
         self.resize(PILL_W, PILL_H)
@@ -53,6 +57,9 @@ class Pill(QtWidgets.QWidget):
         self._done_kind = "copied"  # copied | note
         self._last = time.monotonic()
         self._activity = None       # token anti App Nap (só macOS)
+        self._native_done = False   # janela nativa do macOS já configurada?
+        self._front_app = None      # app que estava em foco ao começar (macOS)
+        self.focus_restored = False
 
         self._timer = QtCore.QTimer(self)
         # PreciseTimer: o CoarseTimer padrão deixa o SO agrupar/atrasar os ticks.
@@ -86,10 +93,15 @@ class Pill(QtWidgets.QWidget):
         self.level = 0.0
         self.shrink = 0.0
         self.bars = [0.08] * BARS
+        # macOS: guarda o app em foco ANTES de mostrar a pill (é nele que o texto
+        # vai ser colado) e garante que a janela nativa não rouba o foco.
+        self._remember_front_app()
+        self._mac_make_nonactivating()
         # posiciona antes e depois do show (WMs divergem) + reaplica em 50ms pra
         # geometria de tela que no boot ainda não estava pronta.
         self._position()
         self.show()
+        self._mac_make_nonactivating()
         self._position()
         self.raise_()
         QtCore.QTimer.singleShot(50, self._position)
@@ -118,6 +130,62 @@ class Pill(QtWidgets.QWidget):
         self._timer.stop()
         self._end_activity()
         self.hide()
+
+    # ── macOS: a pill nunca pode tirar o foco do campo onde o texto vai colar ──
+    # Qt.WindowDoesNotAcceptFocus/WA_ShowWithoutActivating bastam no Linux e no
+    # Windows. No macOS a janela nativa ainda pode ativar o app ao aparecer, e aí
+    # o campo de texto do outro app perde o foco e o Cmd+V não cola em lugar
+    # nenhum. Aqui a NSPanel vira "non-activating", ignora o mouse e não some
+    # quando o app está inativo.
+    def _mac_make_nonactivating(self) -> None:
+        if sys.platform != "darwin" or self._native_done:
+            return
+        try:
+            import objc
+            from AppKit import NSPanel
+            view = objc.objc_object(c_void_p=int(self.winId()))
+            win = view.window()
+            if win is None:
+                return  # janela nativa ainda não existe; tenta de novo após o show
+            if win.isKindOfClass_(NSPanel):
+                win.setStyleMask_(win.styleMask() | (1 << 7))  # NonactivatingPanel
+                win.setBecomesKeyOnlyIfNeeded_(True)
+            win.setIgnoresMouseEvents_(True)
+            win.setHidesOnDeactivate_(False)
+            # todas as áreas de trabalho + por cima de app em tela cheia
+            win.setCollectionBehavior_((1 << 0) | (1 << 4) | (1 << 8))
+            self._native_done = True
+        except Exception:
+            pass
+
+    def _remember_front_app(self) -> None:
+        if sys.platform != "darwin":
+            return
+        try:
+            from AppKit import NSWorkspace
+            app = NSWorkspace.sharedWorkspace().frontmostApplication()
+            if app is not None and app.processIdentifier() != os.getpid():
+                self._front_app = app
+        except Exception:
+            pass
+
+    @QtCore.Slot()
+    def restore_focus(self) -> None:
+        """Rede de segurança antes de colar (macOS): se o mr-whisper virou o app
+        ativo, devolve o foco pro app que estava na frente quando a gravação
+        começou. Se o usuário trocou de app por conta própria, não mexe. Roda na
+        thread da UI (AppKit fora da thread principal já derrubou o app)."""
+        self.focus_restored = False
+        if sys.platform != "darwin" or self._front_app is None:
+            return
+        try:
+            from AppKit import NSWorkspace
+            cur = NSWorkspace.sharedWorkspace().frontmostApplication()
+            if cur is None or cur.processIdentifier() == os.getpid():
+                self._front_app.activateWithOptions_(1 << 1)  # IgnoringOtherApps
+                self.focus_restored = True
+        except Exception:
+            pass
 
     # ── macOS: sem App Nap enquanto a pill anima ──────────────────────────────
     # O app é um processo de fundo (nunca é a janela ativa), e o macOS aplica App
