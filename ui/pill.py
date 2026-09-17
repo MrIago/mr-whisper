@@ -14,6 +14,8 @@ círculo sem trocar de widget.
 from __future__ import annotations
 
 import math
+import sys
+import time
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
@@ -46,15 +48,26 @@ class Pill(QtWidgets.QWidget):
         self.phase = 0.0
         self.shrink = 0.0           # 0 = largura cheia, 1 = círculo (ease-out)
         self._shrink_t = 0.0        # progresso linear 0→1 do encolhimento
-        self._done_frames = 0
+        self._done_t = 0.0          # segundos desde que o ícone final apareceu
         self._pending_done = False
         self._done_kind = "copied"  # copied | note
+        self._last = time.monotonic()
+        self._activity = None       # token anti App Nap (só macOS)
 
         self._timer = QtCore.QTimer(self)
+        # PreciseTimer: o CoarseTimer padrão deixa o SO agrupar/atrasar os ticks.
+        self._timer.setTimerType(QtCore.Qt.PreciseTimer)
         self._timer.timeout.connect(self._tick)
-        self._timer.setInterval(16)  # ~60 fps (mais fluido)
+        self._timer.setInterval(16)  # ~60 fps
 
-    SHRINK_FRAMES = 42  # ~0.7s pra virar círculo, curva ease-in-out aplicada
+    # A animação é por TEMPO decorrido, não por contagem de frames: se o SO
+    # atrasar ticks (macOS faz isso com app de fundo), ela perde quadros mas
+    # mantém a velocidade, em vez de ficar lenta e travada.
+    SHRINK_SECS = 0.7     # tempo pra virar círculo (curva ease-in-out)
+    DONE_SECS = 0.4       # tempo do ícone final visível
+    POP_SECS = 0.1        # duração do "pop" de escala do ícone
+    PHASE_SPEED = 11.25   # rad/s do spinner e do balanço da waveform
+    BAR_SMOOTH = 0.22     # suavização das barras por quadro de 16ms
 
     @staticmethod
     def _ease_out(t: float) -> float:
@@ -80,6 +93,8 @@ class Pill(QtWidgets.QWidget):
         self._position()
         self.raise_()
         QtCore.QTimer.singleShot(50, self._position)
+        self._last = time.monotonic()
+        self._begin_activity()
         self._timer.start()
 
     def set_level(self, lvl: float) -> None:
@@ -101,7 +116,36 @@ class Pill(QtWidgets.QWidget):
 
     def hide_pill(self) -> None:
         self._timer.stop()
+        self._end_activity()
         self.hide()
+
+    # ── macOS: sem App Nap enquanto a pill anima ──────────────────────────────
+    # O app é um processo de fundo (nunca é a janela ativa), e o macOS aplica App
+    # Nap nesses: atrasa e agrupa timers pra poupar bateria, o que deixava a
+    # animação travada. Pedimos prioridade de latência só enquanto a pill está na
+    # tela e devolvemos ao esconder. No-op fora do macOS ou sem o pyobjc.
+    def _begin_activity(self) -> None:
+        if sys.platform != "darwin" or self._activity is not None:
+            return
+        try:
+            from Foundation import NSProcessInfo
+            user_initiated_allowing_idle_sleep = 0x00EFFFFF
+            latency_critical = 0xFF00000000
+            self._activity = NSProcessInfo.processInfo().beginActivityWithOptions_reason_(
+                user_initiated_allowing_idle_sleep | latency_critical,
+                "mr-whisper pill animation")
+        except Exception:
+            self._activity = None
+
+    def _end_activity(self) -> None:
+        if self._activity is None:
+            return
+        try:
+            from Foundation import NSProcessInfo
+            NSProcessInfo.processInfo().endActivity_(self._activity)
+        except Exception:
+            pass
+        self._activity = None
 
     # ── posição (centro-baixo da tela do cursor) ──────────────────────────────
     def _position(self) -> None:
@@ -113,19 +157,24 @@ class Pill(QtWidgets.QWidget):
 
     # ── animação ───────────────────────────────────────────────────────────────
     def _tick(self) -> None:
-        # a 60fps os incrementos são ~metade dos de 30fps pra manter a mesma
-        # velocidade visual (spinner e waveform).
-        self.phase += 0.18
-        # waveform (só no listening)
+        # dt = tempo real desde o último tick (limitado, pra um engasgo longo não
+        # virar um salto brusco). Tudo abaixo avança proporcional a dt.
+        now = time.monotonic()
+        dt = min(0.1, max(0.0, now - self._last))
+        self._last = now
+
+        self.phase += self.PHASE_SPEED * dt
+        # waveform (só no listening). Suavização exponencial equivalente a
+        # BAR_SMOOTH por quadro de 16ms, independente do intervalo real.
+        k = 1.0 - (1.0 - self.BAR_SMOOTH) ** (dt / 0.016)
         for i in range(BARS):
             wobble = 0.5 + 0.5 * math.sin(self.phase + i * 0.6)
             target = 0.08 + self.level * (0.25 + 0.75 * wobble)
-            self.bars[i] += (target - self.bars[i]) * 0.22
+            self.bars[i] += (target - self.bars[i]) * k
 
-        # encolhimento: progresso por TEMPO + curva ease-out (bézier de saída).
-        # avança quando transcrevendo/done; recua se voltar pro listening.
+        # encolhimento: avança quando transcrevendo/done; zera no listening.
         if self.mode in ("transcribing", "done"):
-            self._shrink_t = min(1.0, self._shrink_t + 1.0 / self.SHRINK_FRAMES)
+            self._shrink_t = min(1.0, self._shrink_t + dt / self.SHRINK_SECS)
         else:
             self._shrink_t = 0.0
         self.shrink = self._ease_out(self._shrink_t)
@@ -134,11 +183,11 @@ class Pill(QtWidgets.QWidget):
         if self._pending_done and self.shrink > 0.985:
             self._pending_done = False
             self.mode = "done"
-            self._done_frames = 24  # ~0.8s de ícone visível
+            self._done_t = 0.0
 
         if self.mode == "done":
-            self._done_frames -= 1
-            if self._done_frames <= 0:
+            self._done_t += dt
+            if self._done_t >= self.DONE_SECS:
                 self.hide_pill()
                 return
         self.update()
@@ -198,7 +247,7 @@ class Pill(QtWidgets.QWidget):
     def _draw_copied(self, p, cx, cy, H) -> None:
         """Ícone de 'copiado' (dois retângulos sobrepostos, estilo clipboard) em
         verde, com um pop de escala rápido pra dar o toque de sucesso."""
-        pop = 1.0 + 0.15 * max(0.0, math.sin(min(1.0, (24 - self._done_frames) / 6) * math.pi))
+        pop = 1.0 + 0.15 * max(0.0, math.sin(min(1.0, self._done_t / self.POP_SECS) * math.pi))
         s = H * 0.18 * pop
         pen = QtGui.QPen(INK, 2.4)
         pen.setJoinStyle(QtCore.Qt.RoundJoin)
@@ -212,7 +261,7 @@ class Pill(QtWidgets.QWidget):
     def _draw_note(self, p, cx, cy, H) -> None:
         """Ícone de nota/anotação (folha com linhas de texto) em verde, para o
         comando 'new dump', que salva nas notas em vez de colar."""
-        pop = 1.0 + 0.15 * max(0.0, math.sin(min(1.0, (24 - self._done_frames) / 6) * math.pi))
+        pop = 1.0 + 0.15 * max(0.0, math.sin(min(1.0, self._done_t / self.POP_SECS) * math.pi))
         w = H * 0.30 * pop
         h = H * 0.40 * pop
         x, y = cx - w / 2, cy - h / 2

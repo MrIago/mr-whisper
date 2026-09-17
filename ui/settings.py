@@ -384,8 +384,17 @@ class SettingsWindow(QtWidgets.QWidget):
         srow = QtWidgets.QHBoxLayout()
         srow.addWidget(QtWidgets.QLabel("Paste shortcut:"))
         self.paste_shortcut = QtWidgets.QComboBox()
-        self.paste_shortcut.addItem("Ctrl+V  (most apps & terminals)", "ctrl+v")
-        self.paste_shortcut.addItem("Ctrl+Shift+V  (old terminals)", "ctrl+shift+v")
+        # O valor salvo é o mesmo nos 3 OS ("ctrl+v" | "ctrl+shift+v"); só o
+        # Shift importa pra plataforma, que usa o modificador de colar do SO
+        # (Command no macOS, Ctrl nos demais). O rótulo mostra a tecla real.
+        import sys as _sys
+        if _sys.platform == "darwin":
+            self.paste_shortcut.addItem("Command+V  (standard)", "ctrl+v")
+            self.paste_shortcut.addItem("Command+Shift+V  (paste and match style)",
+                                        "ctrl+shift+v")
+        else:
+            self.paste_shortcut.addItem("Ctrl+V  (most apps & terminals)", "ctrl+v")
+            self.paste_shortcut.addItem("Ctrl+Shift+V  (old terminals)", "ctrl+shift+v")
         self.paste_shortcut.currentIndexChanged.connect(self._save_paste)
         srow.addWidget(self.paste_shortcut, 1)
         layout.addLayout(srow)
