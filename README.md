@@ -50,10 +50,14 @@ even for long text).
 | Windows | `mr-whisper-windows.zip` | unzip, run `mr-whisper.exe` |
 | Linux | `mr-whisper-linux.tar.gz` | extract, run `./mr-whisper` |
 
-A 🎙️ icon appears in your tray (menu: Recent · Voice commands · Settings ·
-Pause · Quit). First launch opens **Settings**, pick a provider and paste your
-key (get a free Groq one right from that screen). Then just hold
-`Ctrl+Alt+Space`, speak, release.
+A microphone icon appears in your tray or menu bar (menu: Recent · Voice
+commands · Notes · Settings · Pause · Quit). First launch opens a short setup
+where you paste your Groq key (free, there is a link to get one right on that
+screen). Then hold the hotkey (`Ctrl+Alt+Space`, or `Control+Option` on macOS),
+speak, release.
+
+Have Claude Code? Open this repo with it and ask it to install mr-whisper for
+you. [CLAUDE.md](CLAUDE.md) has the per-OS steps it follows.
 
 **Permissions (once):**
 - **macOS** → the first time you dictate, the OS asks for **Accessibility**,
