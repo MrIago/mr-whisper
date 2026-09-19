@@ -140,6 +140,15 @@ glued, and PT variants like "auto contexto" / "auto ajusta").
 
 Keys and preferences are stored in `~/.config/mr-whisper/.env` (private).
 
+### Friendly rewrite, "reescreva"
+
+Start with **"reescreva"** and the rest comes back in the same language with a
+light, friendly tone: natural and welcoming, like a real conversation, still
+professional. No stiff formality, no robotic wording.
+
+> _"reescreva, informamos que o prazo foi alterado para sexta"_ → _"Oi! Só
+> avisando que o prazo mudou para sexta, tá?"_
+
 ### Quick notes, "new dump"
 
 Start your dictation with **"new dump"** (or **"novo dump"**) and the rest isn't

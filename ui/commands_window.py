@@ -20,6 +20,10 @@ COMMANDS = [
      "and grammar, keep your words.",
      '"auto adjust, so, uh, we need to ship this friday"  →  "We need to ship '
      'this Friday."'),
+    ("reescreva", "Rewrite in the same language with a light, friendly tone: "
+     "natural and welcoming, still professional, no stiff or robotic wording.",
+     '"reescreva, informamos que o prazo foi alterado para sexta"  →  "Oi! Só '
+     'avisando que o prazo mudou para sexta, tá?"'),
     ("new dump", "Save what you say as a note instead of pasting it. See them in "
      "Notes (tray menu).",
      '"new dump, remember to review the auth PR"  →  saved to your notes'),

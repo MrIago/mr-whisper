@@ -158,6 +158,7 @@ class Wizard(QtWidgets.QWidget):
             '• "auto translate spanish, good morning"  →  translates it\n'
             '• "auto context, ..."  →  rewrites for the right tone\n'
             '• "auto adjust, ..."  →  cleans filler and fixes punctuation\n'
+            '• "reescreva, ..."  →  rewrites with a light, friendly tone\n'
             '• "new dump, ..."  →  saves a note instead of pasting\n\n'
             "Change the hotkey and paste behavior anytime in Settings, "
             "from the tray menu. That's the whole setup.")

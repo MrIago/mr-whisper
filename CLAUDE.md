@@ -229,6 +229,7 @@ macOS crash reports live in `~/Library/Logs/DiagnosticReports/` (look for
   - `auto translate <language>, ...` translates into that language
   - `auto context, ...` rewrites in the same language for the right tone
   - `auto adjust, ...` removes filler words and fixes punctuation
+  - `reescreva, ...` rewrites in the same language with a light, friendly tone
   - `new dump, ...` saves a note instead of pasting (see Notes in the tray menu)
 
 ## If you are changing the code

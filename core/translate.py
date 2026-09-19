@@ -13,6 +13,8 @@ Comandos:
                                  a mensagem.
 - "new dump ..."                 salva a mensagem nas suas notas (ver core/dump),
                                  não cola.
+- "reescreva ..."                reescreve no mesmo idioma com tom leve e
+                                 simpático, sem perder o profissionalismo.
 
 Detecção tolerante (caixa, hífen, pontuação do whisper, variantes PT/EN).
 """
@@ -49,6 +51,12 @@ _DUMP = re.compile(
     r"(?:new|novo)[\s\-]*dump[\s,:;.!?]+(?P<rest>.+)$",
     re.IGNORECASE | re.DOTALL,
 )
+# ── reescreva ─────────────────────────────────────────────────────────────────
+# só no COMEÇO da fala (a palavra "reescreva" pode aparecer numa frase normal).
+_FRIENDLY = re.compile(
+    r"^[\s,.:;!?\"']*re[\s\-]*escreva[\s,:;.!?]+(?P<rest>.+)$",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 def parse(text: str) -> dict | None:
@@ -66,6 +74,8 @@ def parse(text: str) -> dict | None:
         cands.append((m.start(), "adjust", m))
     if (m := _DUMP.search(text)):
         cands.append((m.start(), "dump", m))
+    if (m := _FRIENDLY.search(text)):
+        cands.append((m.start(), "friendly", m))
     if not cands:
         return None
 
@@ -102,6 +112,8 @@ def maybe_transform(text: str, log=print) -> str:
             out = cloud.translate_cloud(msg, p["lang"], context=ctx)
         elif kind == "context":
             out = cloud.context_cloud(msg, context=ctx)
+        elif kind == "friendly":
+            out = cloud.friendly_cloud(msg)
         else:  # adjust
             out = cloud.adjust_cloud(msg)
         if out:
