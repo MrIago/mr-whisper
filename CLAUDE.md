@@ -207,6 +207,7 @@ https://github.com/MrIago/mr-whisper/releases/latest
 | App crashes after transcribing (macOS) | version older than 1.0.10; update |
 | Text field loses focus while speaking (macOS) | version older than 1.0.12; update |
 | Holding the hotkey types spaces | version older than 1.0.10 (macOS) or 1.0.13 (Windows); update |
+| Worked once, then the hotkey stops responding while the app stays open (macOS) | version older than 1.0.14; macOS disabled the keyboard tap after a slow callback. Update |
 
 To see who holds the focus on macOS while the hotkey is held:
 

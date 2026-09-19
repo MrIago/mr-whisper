@@ -8,6 +8,7 @@ Dependências (instaladas pelo setup): sounddevice, pynput, pyperclip.
 """
 from __future__ import annotations
 
+import queue
 import tempfile
 import threading
 import time
@@ -120,15 +121,37 @@ class PynputHotkey:
         # segurada" e o combo depende apenas dos modificadores.
         self.held["_key"] = not self.key
         self.active = False
+        # Os callbacks (abrir o microfone, parar e gravar o wav) rodam num worker,
+        # NUNCA dentro do callback do pynput. No macOS o callback do teclado roda
+        # dentro da event tap do sistema, e se demorar demais o macOS DESLIGA a
+        # tap de vez (kCGEventTapDisabledByTimeout): o app segue vivo, mas o
+        # atalho nunca mais responde. Foi o que aconteceu num Mac Intel, onde
+        # abrir o microfone é mais lento. Enfileirar mantém a ordem press/release.
+        self._jobs: "queue.Queue" = queue.Queue()
+        threading.Thread(target=self._worker, daemon=True).start()
+
+    def _worker(self) -> None:
+        while True:
+            fn = self._jobs.get()
+            try:
+                fn()
+            except Exception as exc:
+                _log(f"hotkey callback falhou: {exc}")
+
+    def _reset(self) -> None:
+        for m in self.mods:
+            self.held[m] = False
+        self.held["_key"] = not self.key
+        self.active = False
 
     def _update(self):
         combo = self.held["_key"] and all(self.held[m] for m in self.mods)
         if combo and not self.active:
             self.active = True
-            self.on_press()
+            self._jobs.put(self.on_press)
         elif not combo and self.active:
             self.active = False
-            self.on_release()
+            self._jobs.put(self.on_release)
 
     def run(self) -> None:
         from pynput import keyboard as kb
@@ -172,7 +195,7 @@ class PynputHotkey:
 
         def on_press(k):
             if k == kb.Key.esc:
-                self.on_cancel()
+                self._jobs.put(self.on_cancel)
                 return
             m = which_mod(k)
             if m:
@@ -196,22 +219,33 @@ class PynputHotkey:
         label = "+".join(sorted(self.mods)) + (f"+{self.key}" if self.key else "")
         _log(f"escutando teclado (pynput), {label}")
         extra = {}
-        swallow = _mac_swallow_trigger(self) if self.key else None
-        if swallow is not None:
-            # macOS: o listener só ESCUTA, então a tecla do atalho também chegava
-            # no app em foco e, segurada, repetia (Option+Espaço enchia o texto
-            # de espaços). Com o intercept a tecla-gatilho é consumida enquanto
-            # os modificadores do atalho estão segurados.
-            extra["darwin_intercept"] = swallow
+        holder: list = []
+        # macOS: um intercept que (1) consome a tecla-gatilho enquanto os
+        # modificadores do atalho estão segurados, senão ela chega no app em foco
+        # e, segurada, repete (Option+Espaço enchia o texto de espaços); e (2)
+        # percebe quando o macOS desliga a event tap e pede pra religar a escuta.
+        restart = {"flag": False}
+        mac_intercept = _mac_intercept(self, holder, restart)
+        if mac_intercept is not None:
+            extra["darwin_intercept"] = mac_intercept
         # Windows: mesmo problema (Ctrl+Alt = AltGr, e AltGr+Espaço digita espaço
         # em vários layouts, inclusive ABNT2). O filtro consome a tecla-gatilho.
-        holder: list = []
         win_filter = _win_swallow_trigger(self, holder) if self.key else None
         if win_filter is not None:
             extra["win32_event_filter"] = win_filter
-        with kb.Listener(on_press=on_press, on_release=on_release, **extra) as listener:
-            holder.append(listener)
-            listener.join()
+        while True:
+            restart["flag"] = False
+            holder.clear()
+            with kb.Listener(on_press=on_press, on_release=on_release, **extra) as listener:
+                holder.append(listener)
+                listener.join()
+            if not restart["flag"]:
+                break
+            # o macOS desligou a tap (callback lento ou entrada segura): o listener
+            # antigo é inútil, cria outro com tap nova e estado zerado.
+            _log("macOS desligou a escuta do teclado; religando")
+            self._reset()
+            time.sleep(0.2)
 
 
 # keycodes físicos do macOS pras teclas especiais (as demais vêm de _MAC_VK)
@@ -266,26 +300,38 @@ def _win_swallow_trigger(hotkey: "PynputHotkey", holder: list):
     return event_filter
 
 
-def _mac_swallow_trigger(hotkey: "PynputHotkey"):
-    """Devolve o callback `darwin_intercept` do pynput que CONSOME a tecla-gatilho
-    enquanto os modificadores do atalho estão segurados (o pynput ainda chama
-    on_press/on_release antes; só o app em foco deixa de receber a tecla). None
-    fora do macOS ou se o Quartz não estiver disponível."""
+# o macOS manda estes "eventos" pra tap quando a desliga: por callback lento
+# (timeout) ou por entrada segura (campo de senha). Depois disso ela não recebe
+# mais nada, e o pynput não a religa.
+_TAP_DISABLED_BY_TIMEOUT = 0xFFFFFFFE
+_TAP_DISABLED_BY_USER_INPUT = 0xFFFFFFFF
+
+
+def _mac_intercept(hotkey: "PynputHotkey", holder: list, restart: dict):
+    """Devolve o callback `darwin_intercept` do pynput (None fora do macOS ou sem
+    Quartz). Ele consome a tecla-gatilho enquanto os modificadores do atalho
+    estão segurados (o pynput ainda chama on_press/on_release antes; só o app em
+    foco deixa de receber a tecla) e, se o macOS desligar a tap, marca
+    `restart` e para o listener pra que `run()` crie outro."""
     import sys
     if sys.platform != "darwin":
-        return None
-    vk = _MAC_SPECIAL_VK.get(hotkey.key, _MAC_VK.get(hotkey.key))
-    if vk is None:
         return None
     try:
         import Quartz
     except Exception:
         return None
+    vk = _MAC_SPECIAL_VK.get(hotkey.key, _MAC_VK.get(hotkey.key)) if hotkey.key else None
     key_events = (Quartz.kCGEventKeyDown, Quartz.kCGEventKeyUp)
 
     def intercept(event_type, event):
         try:
-            if event_type in key_events and all(hotkey.held[m] for m in hotkey.mods):
+            if event_type in (_TAP_DISABLED_BY_TIMEOUT, _TAP_DISABLED_BY_USER_INPUT):
+                restart["flag"] = True
+                if holder:
+                    holder[0].stop()
+                return event
+            if (vk is not None and event_type in key_events
+                    and all(hotkey.held[m] for m in hotkey.mods)):
                 code = Quartz.CGEventGetIntegerValueField(
                     event, Quartz.kCGKeyboardEventKeycode)
                 if code == vk:
