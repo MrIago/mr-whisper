@@ -44,16 +44,35 @@ class SounddeviceRecorder:
         if len(buf) >= 2:
             self.on_level(level_from_rms(rms16(buf)))
 
+    def _open(self):
+        import sounddevice as sd
+        return sd.RawInputStream(
+            samplerate=SAMPLE_RATE, channels=CHANNELS, dtype="int16",
+            blocksize=int(SAMPLE_RATE * 0.05), callback=self._callback,
+        )
+
     def start(self) -> None:
         import sounddevice as sd
         with self._lock:
             self._frames = []
         self.started_at = time.time()
-        self._stream = sd.RawInputStream(
-            samplerate=SAMPLE_RATE, channels=CHANNELS, dtype="int16",
-            blocksize=int(SAMPLE_RATE * 0.05), callback=self._callback,
-        )
-        self._stream.start()
+        try:
+            self._stream = self._open()
+            self._stream.start()
+        except Exception as exc:
+            # A lista de dispositivos do PortAudio envelhece quando outro app
+            # (Teams, Zoom) carrega/descarrega seu driver de áudio: o device
+            # padrão em cache some e a abertura falha com -9986. Reinicializa o
+            # PortAudio pra reler os dispositivos e tenta mais uma vez.
+            _log(f"mic falhou ({exc}); relendo dispositivos e tentando de novo")
+            self._stream = None
+            try:
+                sd._terminate()
+            except Exception:
+                pass
+            sd._initialize()
+            self._stream = self._open()
+            self._stream.start()
         _log("gravando (sounddevice)")
 
     def stop(self) -> str | None:
