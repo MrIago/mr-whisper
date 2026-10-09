@@ -124,11 +124,45 @@ def _vk_for(key: str) -> int | None:
     return None
 
 
+def _mac_pin_keycode_context() -> None:
+    """macOS: lê o layout do teclado UMA vez, na thread principal, e faz o
+    pynput reusar esse valor em todo Listener. Sem isso, cada Listener novo
+    chama TSMGetInputSourceProperty na própria thread (`Listener._run` →
+    `keycode_context`), API que o macOS só aceita na thread principal: quando
+    ela precisa reler a lista de layouts, o app morre com SIGILL em
+    dispatch_assert_queue (crash nativo, try/except não segura). Acontecia ao
+    religar a escuta depois que o macOS desligava a tap. O valor é só
+    (tipo do teclado, bytes do layout), então pode ser reusado entre threads;
+    o atalho compara código físico da tecla, não depende do layout atual."""
+    import sys
+    if sys.platform != "darwin":
+        return
+    if threading.current_thread() is not threading.main_thread():
+        return
+    try:
+        import contextlib
+        from pynput.keyboard import _darwin as kb_darwin
+        if getattr(kb_darwin, "_mrw_pinned", False):
+            return
+        with kb_darwin.keycode_context() as context:
+            pinned = context
+
+        @contextlib.contextmanager
+        def pinned_context():
+            yield pinned
+
+        kb_darwin.keycode_context = pinned_context
+        kb_darwin._mrw_pinned = True
+    except Exception as exc:
+        _log(f"não fixou o layout do teclado ({exc})")
+
+
 class PynputHotkey:
     """Hold-to-talk via pynput com atalho CONFIGURÁVEL (core.config.hotkey_combo).
     Segura os modificadores + tecla → press; solta → release; Esc cancela."""
 
     def __init__(self, on_press, on_release, on_cancel) -> None:
+        _mac_pin_keycode_context()
         self.on_press = on_press
         self.on_release = on_release
         self.on_cancel = on_cancel
