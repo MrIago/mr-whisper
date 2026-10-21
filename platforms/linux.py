@@ -142,6 +142,11 @@ class EvdevHotkey:
         # key == "" → atalho só de modificadores (sem tecla-gatilho)
         self._trigger = _KEY_CODES.get(key, ecodes.KEY_SPACE) if key else None
         self._label = "+".join(sorted(mods)) + (f"+{key}" if key else "")
+        self.held: dict = {}
+
+    def keys_held(self) -> bool:
+        """True enquanto qualquer tecla do atalho está fisicamente apertada."""
+        return any(self.held.values()) if self.held else False
 
     def run(self) -> None:
         keyboards = _find_keyboards()
@@ -152,13 +157,15 @@ class EvdevHotkey:
                  f"{[k.name for k in keyboards]}")
 
         held = {m: False for m in self._mod_codes}
-        # sem tecla-gatilho, ela conta como sempre segurada (só os modificadores)
-        held["_key"] = self._trigger is None
+        # a tecla-gatilho é rastreada à parte: no combo só de modificadores ela
+        # conta como "sempre segurada" pro combo, mas não pra keys_held().
+        key_held = {"v": self._trigger is None}
+        self.held = held
         active = False
 
         def update():
             nonlocal active
-            combo = held["_key"] and all(held[m] for m in self._mod_codes)
+            combo = key_held["v"] and all(held[m] for m in self._mod_codes)
             if combo and not active:
                 active = True
                 self.on_press()
@@ -186,7 +193,8 @@ class EvdevHotkey:
                                 break
                         if not matched:
                             if self._trigger is not None and code == self._trigger:
-                                held["_key"] = pressed
+                                key_held["v"] = pressed
+                                held["_trigger"] = pressed
                             elif code == CANCEL_KEY and event.value == 1:
                                 self.on_cancel()
                                 continue
