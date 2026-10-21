@@ -221,7 +221,7 @@ macOS crash reports live in `~/Library/Logs/DiagnosticReports/` (look for
 ## Using the app
 
 - Hold the hotkey, speak, release. `Esc` cancels.
-- Hands-free: keep holding for 10 seconds. The pill pulses softly until then,
+- Hands-free: keep holding for 5 seconds. The pill pulses softly until then,
   a shine sweeps across it when it locks, and from there you can let go and it
   keeps recording. Press the hotkey again to stop; `Esc` discards.
 - The hotkey is changed in Settings > Hotkey by clicking the keys in order and
