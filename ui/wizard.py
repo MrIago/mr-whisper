@@ -75,13 +75,13 @@ class Wizard(QtWidgets.QWidget):
     def _page_welcome(self) -> QtWidgets.QWidget:
         page = QtWidgets.QWidget()
         v = self._header("Welcome to mr-whisper",
-                         "Voice dictation anywhere. Hold a hotkey, speak, release, "
-                         "and your words are typed where your cursor is.")
+                         "Voice dictation anywhere. Press a hotkey, speak, press it "
+                         "again, and your words are typed where your cursor is.")
         body = QtWidgets.QLabel(
             "The whole app is one gesture:\n\n"
-            f"Hold the hotkey ({config.hotkey_label()}).\n"
-            "Speak while you hold it.\n"
-            "Release, and the text lands where your cursor is.\n\n"
+            f"Press the hotkey ({config.hotkey_label()}). The pill shines: it is recording.\n"
+            "Speak. You can let go of the keys and keep working.\n"
+            "Press the hotkey again, and the text lands where your cursor is.\n\n"
             "It lives in the tray. This short setup gets you there.")
         body.setStyleSheet("font-size:14px; line-height:1.5;")
         body.setWordWrap(True)

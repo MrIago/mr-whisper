@@ -405,7 +405,7 @@ class SettingsWindow(QtWidgets.QWidget):
         hk_title.setStyleSheet("font-size:16px; font-weight:600;")
         layout.addWidget(hk_title)
 
-        layout.addWidget(QtWidgets.QLabel("Hold to dictate:"))
+        layout.addWidget(QtWidgets.QLabel("Press to start and stop dictating:"))
         # monta o atalho clicando nas pills, na ordem do clique.
         self.hotkey = _HotkeyCapture()
         self.hotkey.captured.connect(self._save_hotkey)
@@ -414,7 +414,8 @@ class SettingsWindow(QtWidgets.QWidget):
         hint = QtWidgets.QLabel("Click the keys in order to build the shortcut, "
                                 "then Save. Use one modifier plus a key, or two "
                                 "modifiers alone (nothing gets typed while you "
-                                "hold them). Hold it to speak, release to paste. "
+                                "hold them). Press it to start recording, press it "
+                                "again to transcribe and paste; Esc discards. "
                                 "A new hotkey takes effect after you quit and reopen.")
         hint.setWordWrap(True)
         hint.setStyleSheet("color:#888;")

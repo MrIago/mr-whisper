@@ -2,7 +2,7 @@
 """mr-whisper, app de bandeja cross-platform (Linux/macOS/Windows).
 
 Um único processo Qt: tray icon (Settings / Pause / Quit), a pill flutuante, e a
-janela de settings. O listener de teclado (hold-to-talk) roda numa thread e fala
+janela de settings. O listener de teclado (aperta pra começar, aperta pra parar) roda numa thread e fala
 com a UI por signals. Transcrição na nuvem (groq/openai/openrouter) + comandos
 de voz (translate/context/adjust/dump).
 
@@ -119,6 +119,10 @@ class Controller(QtCore.QObject):
         if stop_locked:
             self._stop()
             return
+        if Pill.LOCK_SECS <= 0:
+            # modo "aperta pra ligar, aperta pra desligar": trava já no press.
+            with self.lock:
+                self.locked = True
         # start() fora do lock (pode falhar/bloquear). Try/except evita o
         # estado-morto: se o mic falha, reseta recording e avisa.
         try:
@@ -374,7 +378,7 @@ def main() -> int:
     controller.sig_update.connect(offer_update)
 
     # dica de uso (hold-to-talk) sempre visível no topo, com o atalho real
-    hint = menu.addAction(f"Hold {config.hotkey_label()} to dictate")
+    hint = menu.addAction(f"Press {config.hotkey_label()} to start and stop dictating")
     hint.setEnabled(False)
 
     # histórico das últimas transcrições, clicar recopia pro clipboard

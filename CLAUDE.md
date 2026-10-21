@@ -5,8 +5,8 @@ The most common job is **installing or updating mr-whisper for the person at
 this computer**. That is the first half of this file. Notes for changing the
 code are at the end.
 
-mr-whisper is a system-wide voice dictation app. Hold a hotkey, speak, release,
-and the transcribed text is pasted where the cursor is. It lives in the tray or
+mr-whisper is a system-wide voice dictation app. Press a hotkey, speak, press it
+again, and the transcribed text is pasted where the cursor is. It lives in the tray or
 menu bar, transcribes in the cloud with Groq (one free API key), and runs on
 Linux, macOS and Windows.
 
@@ -173,10 +173,11 @@ After installing or updating, test with the person, in this order:
 
 1. Exactly one process is running (`pgrep -fl mr-whisper`, or Task Manager on
    Windows) and there is one microphone icon.
-2. They click into a text field (a notes app, a browser search box), hold the
-   hotkey, speak a sentence, and release **without clicking anything else**.
-3. While they speak, the floating pill shows a waveform. On release it shrinks
-   into a circle with a spinner, then shows a "copied" icon.
+2. They click into a text field (a notes app, a browser search box), press the
+   hotkey, speak a sentence, and press it again **without clicking anything
+   else**.
+3. While they speak, the floating pill shows a waveform. On the second press it
+   shrinks into a circle with a spinner, then shows a "copied" icon.
 4. The text appears in the field on its own, the cursor never left the field,
    nothing was typed while they held the hotkey, and the app is still running
    afterwards.
@@ -220,10 +221,11 @@ macOS crash reports live in `~/Library/Logs/DiagnosticReports/` (look for
 
 ## Using the app
 
-- Hold the hotkey, speak, release. `Esc` cancels.
-- Hands-free: keep holding for 5 seconds. The pill pulses softly until then,
-  a shine sweeps across it when it locks, and from there you can let go and it
-  keeps recording. Press the hotkey again to stop; `Esc` discards.
+- Recording is a toggle. Press the hotkey once: the pill opens with a shine
+  and records, and you can let go of the keys and keep working (Ctrl+C,
+  Ctrl+V, switching windows, none of it interferes). Press the hotkey again to
+  transcribe and paste where the cursor is at that moment. `Esc` discards a
+  recording or cancels mid-transcription.
 - The hotkey is changed in Settings > Hotkey by clicking the keys in order and
   pressing Save. Valid combos are one modifier plus a key, or two or more
   modifiers alone. It takes effect after quitting and reopening the app.

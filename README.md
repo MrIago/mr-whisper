@@ -2,7 +2,7 @@
 
 **System-wide voice dictation, cross-platform, free-tier, private-ish.** A [Wispr Flow](https://wisprflow.ai/) alternative that runs on **Linux, macOS and Windows**.
 
-Hold a hotkey, speak, release. Your speech is transcribed in the cloud (Groq / OpenAI / OpenRouter, your key, your choice) and pasted into whatever text field is focused, terminal, editor, browser, any app. On top of plain dictation it can **translate**, **rewrite for tone**, **clean up filler**, or **save quick notes**, all by voice.
+Press a hotkey, speak, press it again. Your speech is transcribed in the cloud (Groq / OpenAI / OpenRouter, your key, your choice) and pasted into whatever text field is focused, terminal, editor, browser, any app. On top of plain dictation it can **translate**, **rewrite for tone**, **clean up filler**, or **save quick notes**, all by voice.
 
 ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-orange.svg)
@@ -14,7 +14,7 @@ Hold a hotkey, speak, release. Your speech is transcribed in the cloud (Groq / O
 
 https://github.com/user-attachments/assets/d6d28e50-0b61-4729-8d9e-31074602c61e
 
-> _Hold `Ctrl+Alt+Space`, speak in Portuguese or English (mixed is fine), release. The text appears where your cursor is._ ▸ 🎤 waveform reacts to your voice ▸ ⟳ transcribing ▸ ✓ text pasted at the cursor.
+> _Press `Ctrl+Alt+Space`, speak in Portuguese or English (mixed is fine), press it again. The text appears where your cursor is._ ▸ 🎤 waveform reacts to your voice ▸ ⟳ transcribing ▸ ✓ text pasted at the cursor.
 
 ## Why
 
@@ -53,8 +53,8 @@ even for long text).
 A microphone icon appears in your tray or menu bar (menu: Recent · Voice
 commands · Notes · Settings · Pause · Quit). First launch opens a short setup
 where you paste your Groq key (free, there is a link to get one right on that
-screen). Then hold the hotkey (`Ctrl+Alt+Space`, or `Control+Option` on macOS),
-speak, release.
+screen). Then press the hotkey (`Ctrl+Alt+Space`, or `Control+Option` on
+macOS), speak, and press it again.
 
 Have Claude Code? Open this repo with it and ask it to install mr-whisper for
 you. [CLAUDE.md](CLAUDE.md) has the per-OS steps it follows.
@@ -82,9 +82,7 @@ Linux extras: `sudo apt install xdotool xclip` and be in the `input` group.
 Autostart helpers live in `run/` (systemd `--user` on Linux, a LaunchAgent
 plist on macOS, a PowerShell/Task-Scheduler note on Windows).
 
-**Usage:** hold `Ctrl+Alt+Space` (on macOS: `Control+Option`, modifiers only, so nothing gets typed while you hold), speak, release. `ESC` cancels mid-transcription. Change the hotkey in Settings.
-
-**Hands-free:** keep holding for 5 seconds. The pill pulses softly until then and a shine sweeps across it when it locks; from there you can let go and it keeps recording. Press the hotkey again to stop, `ESC` to discard.
+**Usage:** press `Ctrl+Alt+Space` (on macOS: `Control+Option`) once. The pill opens with a shine: it is recording, and you can let go of the keys and keep working. Speak, then press the hotkey again to transcribe and paste. `ESC` discards a recording or cancels mid-transcription. Change the hotkey in Settings.
 
 ## Voice features
 
