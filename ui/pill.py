@@ -74,7 +74,7 @@ class Pill(QtWidgets.QWidget):
     # atrasar ticks (macOS faz isso com app de fundo), ela perde quadros mas
     # mantém a velocidade, em vez de ficar lenta e travada.
     SHRINK_SECS = 0.7     # tempo pra virar círculo (curva ease-in-out)
-    LOCK_SECS = 3.0       # segurando o atalho por isso, a gravação TRAVA
+    LOCK_SECS = 10.0      # segurando o atalho por isso, a gravação TRAVA
     PULSE_HZ = 1.1        # pulso leve do fundo enquanto ainda não travou
     SHIMMER_SECS = 0.55   # brilho varrendo de ponta a ponta ao travar
     DONE_SECS = 0.4       # tempo do ícone final visível

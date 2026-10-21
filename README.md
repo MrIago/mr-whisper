@@ -84,7 +84,7 @@ plist on macOS, a PowerShell/Task-Scheduler note on Windows).
 
 **Usage:** hold `Ctrl+Alt+Space` (on macOS: `Control+Option`, modifiers only, so nothing gets typed while you hold), speak, release. `ESC` cancels mid-transcription. Change the hotkey in Settings.
 
-**Hands-free:** keep holding for 3 seconds. The pill pulses softly until then and a shine sweeps across it when it locks; from there you can let go and it keeps recording. Press the hotkey again to stop, `ESC` to discard.
+**Hands-free:** keep holding for 10 seconds. The pill pulses softly until then and a shine sweeps across it when it locks; from there you can let go and it keeps recording. Press the hotkey again to stop, `ESC` to discard.
 
 ## Voice features
 
