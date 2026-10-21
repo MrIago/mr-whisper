@@ -74,6 +74,7 @@ class Controller(QtCore.QObject):
         self.recorder = platform.make_recorder(lambda lvl: self.sig_level.emit(lvl))
         self.delivery = platform.make_delivery()
         self.recording = False
+        self.locked = False      # gravação travada: soltar o atalho não para
         self.transcribing = False
         self.paused = False
         self._cancel = False
@@ -106,9 +107,18 @@ class Controller(QtCore.QObject):
     # chamados pela thread do hotkey
     def press(self) -> None:
         with self.lock:
-            if self.paused or self.recording or self.transcribing:
+            if self.paused or self.transcribing:
                 return
-            self.recording = True
+            if self.recording:
+                # gravação travada: apertar o atalho de novo é o "parar".
+                stop_locked = self.locked
+            else:
+                stop_locked = False
+                self.recording = True
+                self.locked = False
+        if stop_locked:
+            self._stop()
+            return
         # start() fora do lock (pode falhar/bloquear). Try/except evita o
         # estado-morto: se o mic falha, reseta recording e avisa.
         try:
@@ -127,7 +137,22 @@ class Controller(QtCore.QObject):
         with self.lock:
             if not self.recording:
                 return
+            if self.locked:
+                return  # já travada: soltar não faz nada, segue gravando
+            # segurou tempo suficiente? então TRAVA em vez de parar. A pill
+            # mostra o mesmo limiar (pulso até lá, brilho ao travar).
+            if time.time() - self.recorder.started_at >= Pill.LOCK_SECS:
+                self.locked = True
+                return
+        self._stop()
+
+    def _stop(self) -> None:
+        """Para a gravação e manda transcrever (ou descarta se foi curta)."""
+        with self.lock:
+            if not self.recording:
+                return
             self.recording = False
+            self.locked = False
             started_at = self.recorder.started_at
         # stop() FORA do lock: proc.wait(timeout=5) bloquearia o teclado global.
         held = time.time() - started_at
@@ -151,10 +176,22 @@ class Controller(QtCore.QObject):
 
     def cancel(self) -> None:
         with self.lock:
-            if not self.transcribing:
+            if self.recording:
+                # Esc durante a gravação (útil na travada): descarta o áudio.
+                self.recording = False
+                self.locked = False
+                discard = True
+            elif self.transcribing:
+                self._cancel = True
+                self.transcribing = False
+                discard = False
+            else:
                 return
-            self._cancel = True
-            self.transcribing = False
+        if discard:
+            try:
+                self._rm(self.recorder.stop())
+            except Exception:
+                pass
         self.sig_hide.emit()
         self._refresh_tray()
 

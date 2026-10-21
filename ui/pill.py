@@ -53,6 +53,9 @@ class Pill(QtWidgets.QWidget):
         self.shrink = 0.0           # 0 = largura cheia, 1 = círculo (ease-out)
         self._shrink_t = 0.0        # progresso linear 0→1 do encolhimento
         self._done_t = 0.0          # segundos desde que o ícone final apareceu
+        self._listen_t = 0.0        # segundos ouvindo (conta pra trava)
+        self.locked = False         # trava visual (mesmo limiar do controller)
+        self._shimmer_t = None      # progresso do brilho; None = sem brilho
         self._pending_done = False
         self._done_kind = "copied"  # copied | note
         self._last = time.monotonic()
@@ -71,6 +74,9 @@ class Pill(QtWidgets.QWidget):
     # atrasar ticks (macOS faz isso com app de fundo), ela perde quadros mas
     # mantém a velocidade, em vez de ficar lenta e travada.
     SHRINK_SECS = 0.7     # tempo pra virar círculo (curva ease-in-out)
+    LOCK_SECS = 3.0       # segurando o atalho por isso, a gravação TRAVA
+    PULSE_HZ = 1.1        # pulso leve do fundo enquanto ainda não travou
+    SHIMMER_SECS = 0.55   # brilho varrendo de ponta a ponta ao travar
     DONE_SECS = 0.4       # tempo do ícone final visível
     POP_SECS = 0.1        # duração do "pop" de escala do ícone
     PHASE_SPEED = 11.25   # rad/s do spinner e do balanço da waveform
@@ -93,6 +99,9 @@ class Pill(QtWidgets.QWidget):
         self.level = 0.0
         self.shrink = 0.0
         self.bars = [0.08] * BARS
+        self._listen_t = 0.0
+        self.locked = False
+        self._shimmer_t = None
         # macOS: guarda o app em foco ANTES de mostrar a pill (é nele que o texto
         # vai ser colado) e garante que a janela nativa não rouba o foco.
         self._remember_front_app()
@@ -240,6 +249,17 @@ class Pill(QtWidgets.QWidget):
             target = 0.08 + self.level * (0.25 + 0.75 * wobble)
             self.bars[i] += (target - self.bars[i]) * k
 
+        # trava: pulso leve até LOCK_SECS, aí o brilho varre a pill uma vez.
+        if self.mode == "listening":
+            self._listen_t += dt
+            if not self.locked and self._listen_t >= self.LOCK_SECS:
+                self.locked = True
+                self._shimmer_t = 0.0
+        if self._shimmer_t is not None:
+            self._shimmer_t += dt
+            if self._shimmer_t >= self.SHIMMER_SECS:
+                self._shimmer_t = None
+
         # encolhimento: avança quando transcrevendo/done; zera no listening.
         if self.mode in ("transcribing", "done"):
             self._shrink_t = min(1.0, self._shrink_t + dt / self.SHRINK_SECS)
@@ -268,10 +288,17 @@ class Pill(QtWidgets.QWidget):
         pw = self._pill_w()
         x0 = (W - pw) / 2  # centraliza a pill encolhida dentro da janela cheia
 
-        # corpo da pill (retângulo arredondado; quando pw==H vira círculo)
+        # corpo da pill (retângulo arredondado; quando pw==H vira círculo).
+        # Enquanto ouve e ainda não travou, o fundo pulsa de leve (a dica de
+        # que segurar mais vai travar); depois fica parado.
+        body = QtCore.QRectF(x0, 0, pw, H)
+        bg = QtGui.QColor(BG)
+        if self.mode == "listening" and not self.locked:
+            wave = 0.5 + 0.5 * math.sin(2 * math.pi * self.PULSE_HZ * self._listen_t)
+            bg.setAlpha(int(BG.alpha() - 30 * wave))
         p.setPen(QtCore.Qt.NoPen)
-        p.setBrush(BG)
-        p.drawRoundedRect(QtCore.QRectF(x0, 0, pw, H), H / 2, H / 2)
+        p.setBrush(bg)
+        p.drawRoundedRect(body, H / 2, H / 2)
 
         cx, cy = W / 2, H / 2
         if self.mode == "done":
@@ -285,7 +312,30 @@ class Pill(QtWidgets.QWidget):
         else:
             # já quase círculo: spinner
             self._draw_spinner(p, cx, cy, H)
+        if self._shimmer_t is not None:
+            self._draw_shimmer(p, body, H)
         p.end()
+
+    def _draw_shimmer(self, p, body, H) -> None:
+        """Brilho (faixa clara inclinada) varrendo a pill da esquerda pra
+        direita uma vez: o sinal de que a gravação travou."""
+        t = self._shimmer_t / self.SHIMMER_SECS            # 0 → 1
+        band = body.width() * 0.35
+        x = body.left() - band + (body.width() + 2 * band) * t
+        grad = QtGui.QLinearGradient(x, 0, x + band, H * 0.6)  # inclinada
+        clear = QtGui.QColor(255, 255, 255, 0)
+        bright = QtGui.QColor(255, 255, 255, 90)
+        grad.setColorAt(0.0, clear)
+        grad.setColorAt(0.5, bright)
+        grad.setColorAt(1.0, clear)
+        path = QtGui.QPainterPath()
+        path.addRoundedRect(body, H / 2, H / 2)
+        p.save()
+        p.setClipPath(path)
+        p.setPen(QtCore.Qt.NoPen)
+        p.setBrush(QtGui.QBrush(grad))
+        p.drawRect(body)
+        p.restore()
 
     def _draw_waveform(self, p, x0, W, H) -> None:
         # fade das barras conforme a pill começa a encolher

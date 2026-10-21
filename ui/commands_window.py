@@ -42,7 +42,9 @@ class CommandsWindow(QtWidgets.QWidget):
         top = QtWidgets.QLabel(
             "Say one of these at the <b>start</b> of your dictation. Everything "
             "before the command is used as context and never pasted; everything "
-            "after it is transformed.")
+            "after it is transformed.<br><br>Hands-free: keep holding the hotkey "
+            "for 3 seconds until the pill shines, then let go. It keeps recording "
+            "until you press the hotkey again (Esc discards).")
         top.setWordWrap(True)
         top.setTextFormat(QtCore.Qt.RichText)
         top.setStyleSheet("color:#aaa;")
