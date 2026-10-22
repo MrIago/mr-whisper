@@ -197,12 +197,6 @@ class PynputHotkey:
         self.held["_key"] = not self.key
         self.active = False
 
-    def keys_held(self) -> bool:
-        """True enquanto qualquer tecla do atalho está fisicamente apertada."""
-        if any(self.held[m] for m in self.mods):
-            return True
-        return bool(self.key) and self.held["_key"]
-
     def _update(self):
         combo = self.held["_key"] and all(self.held[m] for m in self.mods)
         if combo and not self.active:

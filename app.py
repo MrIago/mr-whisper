@@ -80,7 +80,6 @@ class Controller(QtCore.QObject):
         self._cancel = False
         self.lock = threading.Lock()
         self.history: list[str] = []  # últimas transcrições (mais recente no fim)
-        self.hotkey = None  # setado por main(); usado pra esperar soltar o atalho
 
         self.sig_listening.connect(pill.show_listening)
         self.sig_level.connect(pill.set_level)
@@ -200,23 +199,6 @@ class Controller(QtCore.QObject):
         self.sig_hide.emit()
         self._refresh_tray()
 
-    def _wait_hotkey_released(self, timeout: float = 2.0) -> None:
-        """Espera o usuário soltar as teclas do atalho antes de injetar o paste.
-        No modo de toggle o "parar" é um aperto, e o Ctrl+V sintético chegava
-        com Ctrl/Alt físicos ainda apertados: no Wayland (teclado virtual à
-        parte) isso vira Ctrl+Alt+V e um Ctrl solto "duas vezes", o que dispara
-        atalho do sistema em vez de colar. Esperar resolve nos 3 OS."""
-        hk = self.hotkey
-        if hk is None or not hasattr(hk, "keys_held"):
-            return
-        deadline = time.time() + timeout
-        while hk.keys_held() and time.time() < deadline:
-            time.sleep(0.03)
-        if hk.keys_held():
-            print("atalho ainda apertado após 2s; colando assim mesmo", flush=True)
-        else:
-            time.sleep(0.08)  # o compositor registra os releases antes do paste
-
     def _restore_focus(self) -> None:
         """macOS: antes de colar, garante que o app onde o usuário estava
         digitando é o ativo (a pill o guardou ao começar a gravar). A checagem
@@ -267,7 +249,6 @@ class Controller(QtCore.QObject):
             auto = (config.get("MRWHISPER_AUTO_PASTE", "1") or "1") != "0"
             shortcut = config.get("MRWHISPER_PASTE_SHORTCUT", "ctrl+v") or "ctrl+v"
             self._restore_focus()
-            self._wait_hotkey_released()
             pasted = self.delivery.deliver(text, paste=auto, shortcut=shortcut)
             print(f"entregue ({len(text)} chars, paste={auto}→{pasted}, {shortcut})", flush=True)
             with self.lock:
@@ -447,7 +428,6 @@ def main() -> int:
 
     # ── hotkey em thread ──────────────────────────────────────────────────────
     hotkey = platform.make_hotkey(controller.press, controller.release, controller.cancel)
-    controller.hotkey = hotkey
     threading.Thread(target=hotkey.run, daemon=True).start()
 
     # 1º uso (sem chave): abre o wizard passo-a-passo; senão, já está pronto.
